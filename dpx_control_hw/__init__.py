@@ -1,4 +1,5 @@
 import serial
+import time
 
 # Local imports
 from . import config
@@ -12,10 +13,10 @@ class Dosepix():
         self.port_name = port_name
         self.config_fn = config_fn
 
-        # Detector settings
+        # Detector settings, standard values
         self.periphery_dacs = None
         self.thl = None
-        self.omr = None
+        self.omr = '01ffc0'
         self.conf_bits = None
         self.pixel_dacs = None
         self.bin_edges = None
@@ -43,26 +44,50 @@ class Dosepix():
 
     def init_DPX(self):
         self.connect()
-        self.comm = communicate.Communicate(self.ser, debug=True)
+        self.comm = communicate.Communicate(self.ser, debug=False)
         self.dpf = dpx_functions.DPXFunctions(self, self.comm)
 
-        while True:
-            # res = self.comm.get_data()
-            s = self.ser.read(size=512)
-            s = [int.from_bytes(s[i:i+2], 'big') for i in range(0, len(s), 2)]
-            print( s )
-
         self.dpf.enable_vdd()
+        self.dpf.global_reset()
+        # self.dpf.write_omr('123456')
 
-        self.dpf.write_omr('123456')
-        res = self.dpf.read_omr()
-        print(['%02x' % r for r in res])
+        self.dpf.set_dosi_mode()
+        print( self.dpf.read_omr() )
 
         self.dpf.write_periphery('12345678123456781234567812345612')
-        res = self.dpf.read_periphery()
-        print(['%02x' % r for r in res])
+        print( self.dpf.read_periphery() )
 
-        self.dpf.disable_vdd()
+        start_time = time.time()
+        cnt = 0
+        try:
+            while True:
+                self.dpf.data_reset()
+                s = self.dpf.read_tot()
+                print( s )
+
+                # == Periphery Benchmark ==
+                '''
+                # print('%032d' % cnt)
+                self.dpf.write_periphery('%032d' % (cnt))
+                self.dpf.read_periphery()
+                '''
+
+                # == OMR Benchmark ==
+                '''
+                time.sleep(0.1)
+                # self.dpf.write_omr('%06d' % (cnt))
+                # print('OMR send: ' + '%06d' % (cnt))
+                res = self.dpf.read_omr()
+                print('OMR read: ' + res)
+                # print()
+                '''
+                
+                cnt += 1
+                if not cnt % 1000:
+                    print(cnt / (time.time() - start_time))
+        except KeyboardInterrupt:
+            self.dpf.disable_vdd()
+            return
 
     def get_serial(self):
         return self.ser

@@ -6,10 +6,16 @@ class Communicate():
         self.ser = ser
         self.debug = debug
 
-    def send_cmd(self, command):
+    def send_cmd(self, command, write=True):
+        command += (20 - len(command)) * '?'
+
         if self.debug:
             print(command)
-        self.ser.write(str.encode('#' + command))
+        if write:
+            self.ser.write(str.encode('#' + command))
+        else:
+            self.ser.write(str.encode('!' + command))
+
         res = self.get_response()
         if self.debug:
             print(res)
@@ -17,15 +23,20 @@ class Communicate():
         return res == CMD_OK
 
     def send_data(self, data):
-        self.ser.write(str.encode(data))
+        self.ser.write(str.encode(data) + str.encode('#'))
+
         res = self.get_response()
-        print(res)
+        if self.debug:
+            print(res)
+            print()
         return res == DATA_OK
 
     def send_data_binary(self, data):
-        self.ser.write(bytes.fromhex(data))
+        self.ser.write(bytes.fromhex(data) + str.encode('#'))
         res = self.get_response()
-        print(res)
+        if self.debug:
+            print(res)
+            print()
         return res == DATA_OK
 
     def get_response(self):
@@ -33,7 +44,17 @@ class Communicate():
         # Remove newline
         return res[:-1].decode()
 
-    def get_data(self):
-        res = self.ser.read_until()[:-1]
-        if res[-len(DATA_OK):].decode() == DATA_OK:
-            return res[:-len(DATA_OK)]
+    def get_data(self, size=None):
+        if size is None:
+            res = self.ser.read_until()[:-1]
+            if res[-len(DATA_OK):].decode() == DATA_OK:
+                return res[:-len(DATA_OK)]
+        else:
+            res_data = self.ser.read(size=size)
+            if self.debug:
+                print(res_data)
+                print()
+            res_end = self.ser.read_until()[:-1]
+            if res_end.decode() == DATA_OK:
+                return res_data
+        return ''

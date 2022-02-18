@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 class DPXFunctions():
-    def __init__(self, dpx, comm):
+    def __init__(self, dpx, comm: communicate.Communicate):
         self.dpx = dpx
         self.comm = comm
 
@@ -23,28 +23,30 @@ class DPXFunctions():
 
     # === OMR ===
     def read_omr(self):
-        self.comm.send_cmd('READ_OMR')
-        return self.comm.get_data()
+        self.comm.send_cmd('READ_OMR', write=False)
+        res = self.comm.get_data(size=3)
+        return ''.join( ['%02x' % int(r) for r in res] )
 
     def write_omr(self, data):
         self.comm.send_cmd('WRITE_OMR')
         self.comm.send_data_binary(data)
 
-    def set_pc_mode(self, omr):
+    def set_pc_mode(self):
         omr_code = '%04x' % (
-            (int(omr, 16) & ~((0b11) << 22)) | (0b10 << 22))
+            (int(self.dpx.omr, 16) & ~((0b11) << 22)) | (0b10 << 22))
         self.write_omr(omr_code)
         return omr_code
 
-    def set_dosi_mode(self, omr):
-        omr_code = int(omr, 16) & ~((0b11) << 22)
+    def set_dosi_mode(self):
+        omr_code = '%06x' % (int(self.dpx.omr, 16) & ~((0b11) << 22))
         self.write_omr(omr_code)
         return omr_code
 
     # === PERIPHERY ====
     def read_periphery(self):
-        self.comm.send_cmd('READ_PERIPHERY')
-        return self.comm.get_data()
+        self.comm.send_cmd('READ_PERIPHERY', write=False)
+        res = self.comm.get_data(size=16)
+        return ''.join( ['%02x' % r for r in res] )
 
     def write_periphery(self, data):
         self.comm.send_cmd('WRITE_PERIPHERY')
@@ -52,7 +54,7 @@ class DPXFunctions():
 
     # === PIXEL DAC ===
     def read_pixel_dacs(self):
-        self.comm.send_cmd('READ_PIXEL_DAC')
+        self.comm.send_cmd('READ_PIXEL_DAC', write=False)
         return self.comm.get_data()
 
     def write_pixel_dacs(self, data):
@@ -61,8 +63,9 @@ class DPXFunctions():
 
     # === DATA ===
     def read_tot(self):
-        self.comm.send_cmd('READ_TOT')
-        return self.comm.get_data()
+        self.comm.send_cmd('READ_TOT', write=False)
+        s = self.comm.get_data(size=512)
+        return [int.from_bytes(s[i:i+2], 'little') for i in range(0, len(s), 2)]
 
     # === FUNCTIONS ===
     def measure_tot(self):
