@@ -1,0 +1,39 @@
+CMD_OK = "#CMD_OK"
+DATA_OK = "#DATA_OK"
+
+class Communicate():
+    def __init__(self, ser, debug=False):
+        self.ser = ser
+        self.debug = debug
+
+    def send_cmd(self, command):
+        if self.debug:
+            print(command)
+        self.ser.write(str.encode('#' + command))
+        res = self.get_response()
+        if self.debug:
+            print(res)
+            print()
+        return res == CMD_OK
+
+    def send_data(self, data):
+        self.ser.write(str.encode(data))
+        res = self.get_response()
+        print(res)
+        return res == DATA_OK
+
+    def send_data_binary(self, data):
+        self.ser.write(bytes.fromhex(data))
+        res = self.get_response()
+        print(res)
+        return res == DATA_OK
+
+    def get_response(self):
+        res = self.ser.read_until()
+        # Remove newline
+        return res[:-1].decode()
+
+    def get_data(self):
+        res = self.ser.read_until()[:-1]
+        if res[-len(DATA_OK):].decode() == DATA_OK:
+            return res[:-len(DATA_OK)]
