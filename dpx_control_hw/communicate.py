@@ -23,7 +23,7 @@ class Communicate():
         return res == CMD_OK
 
     def send_data(self, data):
-        self.ser.write(str.encode(data) + str.encode('#'))
+        self.ser.write(str.encode(data))
 
         res = self.get_response()
         if self.debug:
@@ -32,7 +32,7 @@ class Communicate():
         return res == DATA_OK
 
     def send_data_binary(self, data):
-        self.ser.write(bytes.fromhex(data) + str.encode('#'))
+        self.ser.write(bytes.fromhex(data))
         res = self.get_response()
         if self.debug:
             print(res)
