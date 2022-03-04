@@ -99,7 +99,10 @@ class DPXFunctions():
 
     def write_conf_bits(self, data):
         self.comm.send_cmd('WRITE_CONFBITS')
-        self.comm.send_data_binary(data)
+        # Split in chunks
+        for split in range(len(data) // 128):
+            data_split = data[split*128:(split+1)*128]
+            self.comm.send_data_binary( data_split )
 
     # === COLUMN SELECT ===
     def read_column_select(self):
@@ -128,9 +131,38 @@ class DPXFunctions():
         return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
 
     # === FUNCTIONS ===
-    def measure_tot(self):
+    def measure_tot(self,
+        save_frames=None,
+        out_dir='tot_measurement/',
+        int_plot=False,
+        meas_time=None,
+        make_hist=False,
+        use_gui=False
+    ):
         # Activate dosi mode
         self.dpx.omr = self.set_dosi_mode()
+
+        if int_plot:
+            plt.ion()
+            fig, ax = plt.subplots()
+            bins = np.arange(400)
+
+            # Create empty axis
+            ax.set_ylabel('Counts')
+            line = ax.plot(np.nan, np.nan, color='k')[-1]
+            ax.set_xlim(min(bins), max(bins))
+            ax.set_xlabel('ToT')
+            ax.grid()
+
+        # Check if output directory exists
+        if not use_gui:
+            out_dir = support.make_directory(out_dir)
+            if out_dir.endswith('/'):
+                out_dir_ = out_dir[:-1]
+            if '/' in out_dir_:
+                out_fn = out_dir_.split('/')[-1] + '.json'
+            else:
+                out_fn = out_dir_ + '.json'
 
         # Data reset
         self.data_reset()
@@ -139,273 +171,74 @@ class DPXFunctions():
         print('=========================')
         try:
             start_time = time.time()
+            frame_last = np.zeros(256)
+            frame_num = 0
+
+            if make_hist:
+                frame_list = np.zeros((256, 8192))
+            else:
+                frame_list = []
+            plot_hist = np.zeros(4096)
+            time_list = []
+
+            self.data_reset()
             while True:
-                data = self.read_tot()
+                if meas_time is not None:
+                    if time.time() - start_time > meas_time:
+                        break
+
+                frame = np.asarray( self.read_tot() )
+                time_list.append(time.time() - start_time)
+                frame[np.argwhere(frame - frame_last == 0)] = 0
+                frame_last = np.array(frame, copy=True)
+
+                plot_hist[frame] += 1
+                if int_plot and not (frame_num % 100):
+                    print(frame_num)
+                    line.set_ydata(plot_hist)
+                    fig.canvas.draw()
+
+                if not (frame_num % 100):
+                    print( frame_num / (time.time() - start_time))
+
+                if make_hist:
+                    frame_list += frame
+                else:
+                    frame_list.append( frame.tolist() )
+
+                if (save_frames is not None) and (frame_num <= save_frames):
+                    # Only save if gui is not used
+                    if not use_gui:
+                        self.measure_tot_save(frame_list, time_list,
+                            out_dir, out_fn, start_time)
+
+                        # Reset for next save
+                        frame_list, time_list = [], []
+
+                    frame_num = 0
+                frame_num += 1
+
+            self.measure_tot_save(frame_list, time_list,
+                out_dir, out_fn, start_time)
+            yield frame_list
 
         except (KeyboardInterrupt, SystemExit):
-            return
+            if not use_gui:
+                self.measure_tot_save(frame_list, time_list,
+                    out_dir, out_fn, start_time)
+            yield frame_list
 
-    def threshold_equalization(self,
-            thl_step=1,
-            noise_limit=3,
-            thl_offset=0,
-            use_gui=False
+    @classmethod
+    def measure_tot_save(cls,
+            frame_list, time_list,
+            out_dir, out_fn,
+            start_time=None
         ):
-        # Get THL range
-        thl_low, thl_high = 5100, 5700
-        if (self.dpx.thl_edges is None) or (len(self.dpx.thl_edges) == 0):
-            thl_range = np.arange(thl_low, thl_high, thl_step)
-        else:
-            thl_range = np.asarray(self.dpx.thl_edges)
-            thl_range = np.around(
-                    thl_range[np.logical_and(thl_range >= thl_low, thl_range <= thl_high)]
-                )
-
-        print('== Threshold equalization ==')
-        if use_gui:
-            yield {'stage': 'Init'}
-
-        # Set PC Mode in OMR in order to read kVp values
-        self.dpx.omr = self.set_pc_mode()
-        print('OMR set to:', self.dpx.omr)
-
-        # Linear dependence: start and end points are sufficient
-        pixel_dacs = ['00', '3f']
-
-        # Return status to GUI
-        if use_gui:
-            yield {'stage': 'THL_pre_start'}
-            counts_dict_gen = self.get_thl_level(
-                thl_range, pixel_dacs, use_gui=True)
-            for res in counts_dict_gen:
-                if 'status' in res.keys():
-                    yield {'stage': 'THL_pre', 'status': np.round(res['status'], 4)}
-                elif 'DAC' in res.keys():
-                    yield {'stage': 'THL_pre_loop_start', 'status': res['DAC']}
-                else:
-                    counts_dict = res['countsDict']
-        else:
-            counts_dict_gen = self.get_thl_level(
-                thl_range, pixel_dacs, use_gui=False)
-            counts_dict = deque(counts_dict_gen, maxlen=1).pop()
-        gauss_dict, noise_thl = support.get_noise_level(
-            counts_dict, thl_range, pixel_dacs, noise_limit)
-
-        # Transform values to indices and get mean_dict
-        mean_dict, noise_thl = support.val_to_idx(
-            pixel_dacs, gauss_dict, noise_thl,
-            self.dpx.thl_edges_low,
-            self.dpx.thl_edges_high,
-            self.dpx.thl_fit_params)
-
-        # Calculate slope, offset and mean
-        slope = (noise_thl['00'] - noise_thl['3f']) / 64.
-        offset = noise_thl['00']
-        mean = 0.5 * (mean_dict['00'] + mean_dict['3f'])
-
-        # Get adjustment value for each pixel
-        adjust = np.asarray((offset - mean) / slope + 0.5)
-
-        # Consider extreme values
-        adjust[np.isnan(adjust)] = 0
-        adjust[adjust > 63] = 63
-        adjust[adjust < 0] = 0
-
-        # Convert to integer
-        adjust = adjust.astype(dtype=int)
-
-        # Set new pixel_dac values, concert to hex
-        pixel_dac_new = ''.join(['%02x' % entry for entry in adjust.flatten()])
-        print('New pixel dac', pixel_dac_new)
-
-        # Repeat procedure to get noise levels
-        if use_gui:
-            yield {'stage': 'THL_start'}
-            counts_dict_gen = self.get_thl_level(
-                thl_range, pixel_dac_new, use_gui=True)
-            for res in counts_dict_gen:
-                if 'status' in res.keys():
-                    yield {'stage': 'THL', 'status': np.round(res['status'], 4)}
-                elif 'DAC' in res.keys():
-                    yield {'stage': 'THL_loop_start', 'status': res['DAC']}
-                else:
-                    counts_dict_new = res['countsDict']
-        else:
-            counts_dict_new_gen = self.get_thl_level(thl_range, [pixel_dac_new])
-            counts_dict_new = deque(counts_dict_new_gen, maxlen=1).pop()
-
-        gauss_dict_new, noise_thl_new = support.get_noise_level(
-            counts_dict_new, thl_range, [pixel_dac_new], noise_limit)
-
-        # Transform values to indices
-        _, noise_thl_new = support.val_to_idx(
-            [pixel_dac_new], gauss_dict_new, noise_thl_new,
-            self.dpx.thl_edges_low,
-            self.dpx.thl_edges_high,
-            self.dpx.thl_fit_params)
-
-        # Plot the results of the equalization
-        if use_gui:
-            yield {'stage': 'conf_bits'}
-
-        # Create conf_bits
-        conf_mask = np.zeros(256).astype(str)
-        conf_mask.fill('00')
-
-        # Check for noisy pixels after equalization. If there are still any left,
-        # reduce THL even further. If a pixel is really noisy, it shouldn't change
-        # its state even when THL is lowered. Therefore, if pixels don't change their
-        # behavior after 5 decrements of THL, switch them off
-        if use_gui:
-            yield {'stage': 'noise'}
-
-        thl_new = int(np.mean(gauss_dict_new[pixel_dac_new]))
-
-        if self.dpx.thl_edges is not None:
-            print('Getting rid of noisy pixels...')
-            self.write_periphery(
-                self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl_new)))
-
-            pc_noisy_last = []
-            noisy_count = 0
-            while True:
-                pc_data = np.zeros((16, 16))
-                self.data_reset()
-                for _ in range(30):
-                    pc_data += np.asarray(self.read_pc())
-                    self.data_reset()
-                pc_sum = pc_data.flatten()
-
-                # Noisy pixels
-                pc_noisy = np.argwhere(pc_sum > 0).flatten()
-                print('THL: %d' % thl_new)
-                print('Noisy pixels index:')
-                print(pc_noisy)
-                # Compare with previous read-out
-                noisy_common = sorted(list(set(pc_noisy_last) & set(pc_noisy)))
-                print(noisy_common)
-                print(len(pc_noisy), len(noisy_common))
-                print(noisy_count)
-                print()
-
-                # If noisy pixels don't change, increase counter
-                # if len(list(set(noisy_common) & set(pc_noisy))) > 0:
-                if len(pc_noisy) == len(noisy_common) and len(
-                        pc_noisy) == len(pc_noisy_last):
-                    noisy_count += 1
-                pc_noisy_last = np.array(pc_noisy, copy=True)
-
-                # If noisy pixels don't change for 5 succeeding steps,
-                # interrupt
-                if noisy_count == 3 or len(pc_noisy) > 0:
-                    break
-                # Reduce THL by 1
-                thl_new = self.dpx.thl_edges[list(self.dpx.thl_edges).index(thl_new) - 1]
-                self.write_periphery(
-                    self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl_new)))
-
-            # Subtract additional offset to THL
-            thl_new = self.dpx.thl_edges[list(self.dpx.thl_edges).index(thl_new) - thl_offset]
-
-            # Switch off noisy pixels
-            conf_mask[(pc_sum > 10).reshape((16, 16))] = '%02x' % (0b1 << 2)
-        else:
-            thl_new = int(np.mean(gauss_dict_new[pixel_dac_new]) - thl_offset)
-            conf_mask[abs(noise_thl_new[pixel_dac_new] - mean) > 10] = '%02x' % (0b1 << 2)
-
-        # Transform into string
-        conf_mask = ''.join(conf_mask.flatten())
-
-        print()
-        print('Summary:')
-        print('pixel_DACs:', pixel_dac_new)
-        print('confMask:', conf_mask)
-        print('THL:', '%04x' % int(thl_new))
-        print('Bad pixels:', np.argwhere(
-            (abs(noise_thl_new[pixel_dac_new] - mean) > 10)).flatten())
-
-        # Restore OMR values
-        self.write_omr(self.dpx.omr)
-
-        if use_gui:
-            yield {'stage': 'finished',
-                    'pixel_DAC': pixel_dac_new,
-                    'THL': '%04x' % int(thl_new),
-                    'confMask': conf_mask}
-        else:
-            yield pixel_dac_new, '%04x' % int(thl_new), conf_mask
-
-    def get_thl_level(
-            self,
-            thl_range,
-            pixel_dacs=['00', '3f'],
-            use_gui=False
-        ):
-        counts_dict = {}
-        # Loop over pixel_dac values
-        for pixel_dac in pixel_dacs:
-            counts_dict[pixel_dac] = {}
-            print('Set pixel DACs to %s' % pixel_dac)
-
-            # Set pixel DAC values to every pixel
-            pixel_code = pixel_dac * 256
-            self.write_pixel_dacs(pixel_code)
-
-            # Dummy readout
-            self.read_pc()
-
-            # Noise measurement
-            # Loop over THL values
-            print('Loop over THLs')
-
-            # Fast loop
-            counts_list = []
-            thl_range_fast = thl_range[::10]
-            for cnt, thl in enumerate(thl_range_fast):
-                self.write_periphery(
-                    self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl))
-                )
-                self.data_reset()
-                # time.sleep(0.01)
-
-                # Read ToT values into matrix
-                pc = self.read_pc()
-                counts_list.append( pc )
-            counts_list = np.asarray(counts_list).T
-            thl_range_fast = [thl_range_fast[item[0]] if np.any(item) else np.nan for item in [
-                    np.argwhere(counts > 3) for counts in counts_list]]
-
-            # Precise loop
-            if use_gui:
-                yield {'DAC': pixel_dac}
-
-            thl_range_slow = np.around(thl_range[np.logical_and(thl_range >= (
-                np.nanmin(thl_range_fast) - 10), thl_range <= np.nanmax(thl_range_fast))])
-
-            # Do not use tqdm with GUI
-            if use_gui:
-                loop_range = thl_range_slow
-            else:
-                loop_range = tqdm(thl_range_slow)
-            for cnt, thl in enumerate(loop_range):
-                # Repeat multiple times since data is noisy
-                self.write_periphery(self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl)))
-                self.data_reset()
-                # time.sleep(0.1)
-
-                # Read ToT values into matrix
-                counts = self.read_pc()
-                # print(counts)
-                counts_dict[pixel_dac][int(thl)] = counts
-
-                # Return status as generator when using GUI
-                if use_gui:
-                    yield {'status': float(cnt) / len(loop_range)}
-            print()
-        if use_gui:
-            yield {'countsDict': counts_dict}
-        else:
-            yield counts_dict
+        support.json_dump({'tot': frame_list, 'time': time_list},\
+            '%s/%s' % (out_dir, out_fn))
+        if start_time is not None:
+            print('Registered %d events in %.2f minutes' %\
+                (np.count_nonzero(frame_list), (time.time() - start_time) / 60.))
 
     def measure_adc(
             self,

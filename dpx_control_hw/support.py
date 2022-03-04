@@ -1,3 +1,5 @@
+import os
+import json
 import numpy as np
 
 def val_to_idx(pixel_dacs, gauss_dict, noise_thl,
@@ -32,7 +34,7 @@ def get_volt_from_thl_fit(thl_edges_low, thl_edges_high, thl_fit_params, thl):
                 return erf_std_fit(thl, *params)
             return linear_fit(thl, *params)
 
-def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=3):
+def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=0):    
     # Get noise THL for each pixel
     noise_thl = {key: np.zeros(256) for key in pixel_dacs}
     gauss_dict = {key: [] for key in pixel_dacs}
@@ -44,8 +46,7 @@ def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=
                 continue
 
             for pixel in range(256):
-                if counts_dict[pixel_dac][thl][pixel] >= noise_limt and \
-                    noise_thl[pixel_dac][pixel] == 0:
+                if counts_dict[pixel_dac][thl][pixel] > noise_limt:
                     noise_thl[pixel_dac][pixel] = thl
                     gauss_dict[pixel_dac].append(thl)
 
@@ -61,10 +62,10 @@ def split_perihpery_dacs(code, perc=False, show=False):
         perc_eight_bit, perc_nine_bit, perc_thirteen_bit = 1, 1, 1
 
     if show:
+        print('Periphery DAC code:')
         print(code)
+        print()
     code = format(int(code, 16), 'b')
-    if show:
-        print(code)
     d_periphery = {'v_tha': int(code[115:], 2) / perc_thirteen_bit,
             'v_tpref_fine': int(code[103:112], 2) / perc_nine_bit,
             'v_tpref_coarse': int(code[88:96], 2) / perc_eight_bit,
@@ -81,11 +82,18 @@ def split_perihpery_dacs(code, perc=False, show=False):
             'v_casc_reset': int(code[:8], 2) / perc_eight_bit}
 
     if show:
-        print('PeripheryDAC values in', end='')
+        print('PeripheryDAC values in ', end='')
         if perc:
             print('percent:')
         else:
             print('DAC:')
+
+        for key, value in d_periphery.items():
+            if perc:
+                print(key, value * 100)
+            else:
+                print(key, int( value ))
+        print()
 
     return d_periphery
 
@@ -114,6 +122,64 @@ def perihery_dacs_dict_to_code(d_periphery, perc=False):
     code |= (int(d_periphery['v_casc_reset'] * perc_eight_bit) << 128 - 8)
 
     return '%04x' % code
+
+# === File functions ===
+def make_directory(directory):
+    while os.path.isdir(directory):
+        dir_front = directory.split('/')[0]
+        dir_front_split = dir_front.split('_')
+        if len(dir_front_split) >= 2:
+            if dir_front_split[-1].isdigit():
+                dir_num = int(dir_front_split[-1]) + 1
+                directory = ''.join(dir_front_split[:-1]) + '_' + str(dir_num) + '/'
+            else:
+                directory = dir_front + '_1/'
+        else:
+            directory = dir_front + '_1/'
+
+    os.makedirs(directory)
+    return directory
+
+def json_dump(out_dict, out_fn, overwrite=False):
+    file_ending = '.json'
+
+    # Check if file already exists
+    if not overwrite:
+        while os.path.isfile(out_fn):
+            # Split dir and file
+            out_fn_split = out_fn.split('/')
+            if len(out_fn_split) >= 2:
+                directory, out_fn = out_fn_split[:-1], out_fn_split[-1]
+            else:
+                directory = None
+
+            out_fn_front = out_fn.split('.')[0]
+            out_fn_front_split = out_fn_front.split('_')
+            if len(out_fn_front_split) >= 2:
+                if out_fn_front_split[-1].isdigit():
+                    fn_num = int( out_fn_front_split[-1] ) + 1
+                    out_fn = ''.join(out_fn_front_split[:-1]) + '_' + str(fn_num) + file_ending
+                else:
+                    out_fn = out_fn_front + '_1' + file_ending
+            else:
+                out_fn = out_fn_front + '_1' + file_ending
+
+            # Reattach directory
+            if directory:
+                out_fn = '/'.join(directory + [out_fn])
+
+    with open(out_fn, 'w') as out_file:
+        json.dump(out_dict, out_file, cls=NumpyEncoder)
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 # === Fit functions ===
 def linear_fit(x, m, t):

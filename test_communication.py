@@ -1,30 +1,16 @@
 #!/usr/bin/env python
+import json
+
 import dpx_control_hw as dch
-import time
 
 PORT = '/dev/ttyACM0'
 def main():
-    dpx = dch.Dosepix(port_name=PORT)
-    ser = dpx.get_serial()
-
-    # Send
-    idx = 0
-
-    '''
-    while True:
-        # ser.write(b'%d' % idx)
-        ser.write(b'#02')
-        # print(ser.readline())
-        time.sleep(1)
-        ser.write(b'#01')
-        # print(ser.readline())
-        time.sleep(1)
-
-        ser.write(b'#07')
-        time.sleep(1)
-
-        idx += 1
-    '''
+    thl_calib_fn = None # 'thl_calib.json'
+    config_fn = 'dpx_config.conf'
+    dpx = dch.Dosepix(port_name=PORT,
+        config_fn=config_fn,
+        thl_calib_fn=thl_calib_fn)
+    *_, last = dpx.dpf.measure_tot(out_dir='tot_measurement/', int_plot=False)
 
 if __name__ == '__main__':
     main()

@@ -5,18 +5,21 @@ import matplotlib.pyplot as plt
 
 # Local imports
 from . import config
+from . import support
 from . import communicate
 from . import dpx_functions
+from . import equalization
 
 class Dosepix():
     def __init__(self,
             port_name,
-            config_fn=None):
+            config_fn=None,
+            thl_calib_fn=None):
         self.port_name = port_name
         self.config_fn = config_fn
 
         # Detector settings, standard values
-        self.periphery_dacs = 'dc3c0bc86450823877808032006414c4'
+        self.periphery_dacs = 'dc3c0bc86450823877808032006414c0'
         self.thl = None
         self.omr = '381fc0'
         self.conf_bits = None
@@ -30,8 +33,7 @@ class Dosepix():
         self.thl_fit_params = None
 
         # Set detector settings from config
-        if config_fn is not None:
-            self.load_config(config_fn)
+        self.load_config(config_fn, thl_calib_fn)
 
         # Serial connection
         self.ser = None
@@ -39,22 +41,70 @@ class Dosepix():
         self.dpf = None
 
         # Init connection
-        self.init_DPX()
+        self.init_dpx()
 
-    def load_config(self, config_fn):
-        periphery_dacs, thl, omr, conf_bits, pixel_dacs, bin_edges = config.read_config(config_fn)
-        self.periphery_dacs = periphery_dacs
-        self.thl = thl
-        self.omr = omr
-        self.conf_bits = conf_bits
-        self.pixel_dacs = pixel_dacs
-        self.bin_edges = bin_edges
+    def load_config(self, config_fn, thl_calib_fn):
+        if config_fn is not None:
+            conf_d = config.read_config(config_fn)
+            self.periphery_dacs = conf_d['peripherys']
+            self.omr = conf_d['omr']
+            self.conf_bits = conf_d['conf_bits']
+            self.pixel_dacs = conf_d['pixel_dacs']
+            self.bin_edges = conf_d['bin_edges']
 
-    def init_DPX(self):
+        # Load thl calibration
+        if thl_calib_fn is not None:
+            thl_low, thl_high, thl_fit_params, thl_edges = config.read_thl_calibration(thl_calib_fn)
+            print(thl_low)
+            print(thl_high)
+            self.thl_edges_low = thl_low
+            self.thl_edges_high = thl_high
+            self.thl_fit_params = thl_fit_params
+            self.thl_edges = thl_edges
+
+    def equalization(self, config_fn):
+        equal = equalization.Equalization(self, self.comm)
+        *_, last = equal.threshold_equalization(thl_offset=0)
+        pixel_dacs, thl_new, conf_mask = last
+        periphery_dacs = self.periphery_dacs[:-4] + thl_new
+
+        config_d = {
+            'peripherys': periphery_dacs,
+            'omr': self.omr,
+            'pixel_dacs': pixel_dacs,
+            'conf_bits': conf_mask,
+        }
+        config.write_config(config_fn, config_d)
+
+    def set_config(self):
+        self.dpf.write_omr(self.omr)
+        self.dpf.write_periphery(self.periphery_dacs)
+        self.dpf.write_conf_bits(self.conf_bits)
+        self.dpf.write_pixel_dacs(self.pixel_dacs)
+
+    def init_dpx(self):
         self.connect()
         self.comm = communicate.Communicate(self.ser, debug=False)
         self.dpf = dpx_functions.DPXFunctions(self, self.comm)
 
+        # Enable voltages
+        self.dpf.enable_vdd()
+        self.dpf.enable_bias()
+
+        # Loads standard values if no config was specified
+        self.set_config()
+        self.dpf.led_off()
+
+        self.dpf.global_reset()
+        return
+
+        # Change periphery dac settings
+        d_periphery = support.split_perihpery_dacs(self.periphery_dacs, perc=False, show=True)
+        d_periphery['i_krum'] = 10
+        d_periphery['i_pixeldac'] = 40
+        self.periphery_dacs = support.perihery_dacs_dict_to_code(d_periphery, perc=False)
+
+        # Enable voltages
         self.dpf.enable_vdd()
         self.dpf.enable_bias()
         time.sleep(0.3)
@@ -62,33 +112,34 @@ class Dosepix():
         # == GLOBAL RESET ==
         self.dpf.global_reset()
 
-        *_, last = self.dpf.measure_thl(plot=True)
-        return
-
-        # == PIXEL DACS ==
-        # pixel_dacs = 'ff' * 256
-        pixel_dacs = '19153f15163f3f173f3f181811143f173f3f1816141615183f163f17\
-                        13133f16173f1813323f3f1717323f163f1612161319173f3f3f33\
-                        151313003f3f3f163215143f18173f183f1713192c3f161a3f1317\
-                        17133f311718171516193f163f3f183f173f17173f11183f173f18\
-                        133f3f1737193f1814143f163f13183f1817181716173f34143f14\
-                        3f183f17183f183f183314183f1714143f183f1815343f3f2e1815\
-                        3f3f3f19171616183f3f3f3f16183f183514131718171816311813\
-                        15170000130000001700000000003f003f001b3f133f3f18301812\
-                        13123f3f15123f151615163f3f14143f171615143f3f3f16171714\
-                        14143f153f3f143f163f1816'
-        # pixel_dacs = ''.join([np.random.choice(list('0123456789abcdef')) for n in range(512)])
-        print(pixel_dacs)
-        self.dpf.write_pixel_dacs(pixel_dacs)
-        print( self.dpf.read_pixel_dacs() )
-
-        # == OMR ==
-        self.dpf.write_omr('39ffc0')
-        self.dpf.set_dosi_mode()
+        # == Start settings ==
+        self.dpf.write_omr(self.omr)
         print( 'OMR: ' + self.dpf.read_omr() )
+        self.dpf.write_periphery(self.periphery_dacs)
 
-        # *_, last = self.dpf.threshold_equalization(thl_offset=10, use_gui=False)
-        # return
+        # == Threshold equalization ==
+        # *_, last = self.dpf.measure_thl(plot=True)
+        if True:
+            equal = equalization.Equalization(self, self.comm)
+            *_, last = equal.threshold_equalization(thl_offset=0)
+
+            pixel_dac_new, thl_new, conf_mask = last
+            print()
+
+            self.periphery_dacs = self.periphery_dacs[:-4] + thl_new
+            self.dpf.write_periphery(self.periphery_dacs)
+            print('New periphery:', self.dpf.read_periphery())
+
+            self.pixel_dacs = pixel_dac_new
+            self.dpf.write_pixel_dacs(self.pixel_dacs)
+            print('New pixel dacs:', self.dpf.read_pixel_dacs())
+
+            print(conf_mask)
+            self.dpf.write_conf_bits(conf_mask)
+
+        # Set dosi mode to measure ToT
+        self.omr = self.dpf.set_dosi_mode()
+        print( 'OMR: ' + self.dpf.read_omr() )
 
         # == CONFBITS ==
         # conf_bits = ''.join([np.random.choice(list('0123456789abcdef')) for n in range(512)])
@@ -104,28 +155,20 @@ class Dosepix():
         cnt = 0
         self.dpf.write_periphery(self.periphery_dacs)
         print( 'Periphery: ' + self.dpf.read_periphery() )
-        self.dpf.led_off()
+        self.dpf.data_reset()
 
         tot = []
         tot_last = np.zeros(256)
+        self.dpf.led_on()
+        *_, last = self.dpf.measure_tot(out_dir='tot_measurement/')
+
         try:
             while True:
-                '''
-                print(thl)
-                p = 'dc3c0bc864508238778080320064' + '%04x' % thl
-                self.dpf.write_periphery(p)
-                print( 'Periphery: ' + self.dpf.read_periphery() )
-
-                thl += 100
-                if thl > 8000:
-                    thl = 5000
-                '''
-
                 # == ToT Benchmark ==
-                s = np.asarray( self.dpf.read_tot() )
-                s[np.argwhere(s - tot_last == 0)] = 0
-                tot_last = np.array(s, copy=True)
-                tot += list( s )
+                frame = np.asarray( self.dpf.read_tot() )
+                frame[np.argwhere(frame - tot_last == 0)] = 0
+                tot_last = np.array(frame, copy=True)
+                tot += list( frame )
 
                 # == Periphery Benchmark ==
                 '''
@@ -147,6 +190,7 @@ class Dosepix():
                 cnt += 1
                 if not cnt % 1000:
                     print(cnt / (time.time() - start_time))
+
         except KeyboardInterrupt:
             print( len(tot) )
             plt.hist(np.asarray(tot)[np.asarray(tot) > 0], bins=np.arange(2000))
@@ -175,6 +219,10 @@ class Dosepix():
 
         self.ser.close()
         self.ser = None
+
+        self.dpf.led_off()
+        self.dpf.disable_bias()
+        self.dpf.disable_vdd()
 
     def __del__(self):
         # self.comm.send_cmd('DISAB_VDD')
