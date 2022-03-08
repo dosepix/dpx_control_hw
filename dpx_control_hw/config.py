@@ -27,6 +27,7 @@ def read_config(config_fn):
     """
 
     config = configparser.ConfigParser()
+    print(config_fn)
     config.read(config_fn)
 
     # Mandatory sections

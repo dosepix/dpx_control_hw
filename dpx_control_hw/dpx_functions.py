@@ -142,10 +142,12 @@ class DPXFunctions():
         # Activate dosi mode
         self.dpx.omr = self.set_dosi_mode()
 
+        if int_plot or use_gui:
+            bins = np.arange(400)
+
         if int_plot:
             plt.ion()
             fig, ax = plt.subplots()
-            bins = np.arange(400)
 
             # Create empty axis
             ax.set_ylabel('Counts')
@@ -189,8 +191,12 @@ class DPXFunctions():
 
                 frame = np.asarray( self.read_tot() )
                 time_list.append(time.time() - start_time)
-                frame[np.argwhere(frame - frame_last == 0)] = 0
+                frame_filt = np.argwhere(frame - frame_last == 0)
                 frame_last = np.array(frame, copy=True)
+                frame[frame_filt] = 0
+
+                if use_gui:
+                    yield frame
 
                 plot_hist[frame] += 1
                 if int_plot and not (frame_num % 100):
@@ -220,13 +226,20 @@ class DPXFunctions():
 
             self.measure_tot_save(frame_list, time_list,
                 out_dir, out_fn, start_time)
-            yield frame_list
+
+            if use_gui:
+                yield {'Slot1': frame_list}
+            else:
+                yield frame_list
 
         except (KeyboardInterrupt, SystemExit):
             if not use_gui:
                 self.measure_tot_save(frame_list, time_list,
                     out_dir, out_fn, start_time)
-            yield frame_list
+            if use_gui:
+                yield {'Slot1': frame_list}
+            else:
+                yield frame_list
 
     @classmethod
     def measure_tot_save(cls,

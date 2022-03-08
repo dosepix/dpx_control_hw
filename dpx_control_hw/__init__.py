@@ -14,16 +14,18 @@ class Dosepix():
     def __init__(self,
             port_name,
             config_fn=None,
-            thl_calib_fn=None):
+            thl_calib_fn=None,
+            use_gui=False):
         self.port_name = port_name
         self.config_fn = config_fn
 
+        self.use_gui = use_gui
+
         # Detector settings, standard values
         self.periphery_dacs = 'dc3c0bc86450823877808032006414c0'
-        self.thl = None
         self.omr = '381fc0'
-        self.conf_bits = None
-        self.pixel_dacs = None
+        self.conf_bits = '00' * 256
+        self.pixel_dacs = '3f' * 256
         self.bin_edges = None
 
         # THL calibration
@@ -39,6 +41,7 @@ class Dosepix():
         self.ser = None
         self.comm = None
         self.dpf = None
+        self.equal = None
 
         # Init connection
         self.init_dpx()
@@ -63,8 +66,7 @@ class Dosepix():
             self.thl_edges = thl_edges
 
     def equalization(self, config_fn):
-        equal = equalization.Equalization(self, self.comm)
-        *_, last = equal.threshold_equalization(thl_offset=0)
+        *_, last = self.equal.threshold_equalization()
         pixel_dacs, thl_new, conf_mask = last
         periphery_dacs = self.periphery_dacs[:-4] + thl_new
 
@@ -86,6 +88,7 @@ class Dosepix():
         self.connect()
         self.comm = communicate.Communicate(self.ser, debug=False)
         self.dpf = dpx_functions.DPXFunctions(self, self.comm)
+        self.equal = equalization.Equalization(self, self.comm)
 
         # Enable voltages
         self.dpf.enable_vdd()
@@ -202,6 +205,11 @@ class Dosepix():
 
             return
 
+    def set_config_gui(self, config):
+        self.periphery_dacs = self.periphery_dacs[:-4] + '%04x' % config['v_tha']
+        self.conf_bits = config['confbits']
+        self.pixel_dacs = config['pixeldac']
+
     def get_serial(self):
         return self.ser
 
@@ -210,10 +218,10 @@ class Dosepix():
             self.ser = serial.Serial(self.port_name)
             assert self.ser.is_open, 'Error: Could not establish serial connection!'
         elif reconnect:
-            self.disconnect()
+            self.close()
             self.connect()
 
-    def disconnect(self):
+    def close(self):
         if self.ser is None:
             return
 
@@ -226,4 +234,4 @@ class Dosepix():
 
     def __del__(self):
         # self.comm.send_cmd('DISAB_VDD')
-        self.disconnect()
+        self.close()

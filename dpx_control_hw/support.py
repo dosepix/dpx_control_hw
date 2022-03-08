@@ -34,21 +34,22 @@ def get_volt_from_thl_fit(thl_edges_low, thl_edges_high, thl_fit_params, thl):
                 return erf_std_fit(thl, *params)
             return linear_fit(thl, *params)
 
-def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=0):    
+def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=0):
     # Get noise THL for each pixel
     noise_thl = {key: np.zeros(256) for key in pixel_dacs}
     gauss_dict = {key: [] for key in pixel_dacs}
 
     # Loop over each pixel in countsDict
     for pixel_dac in pixel_dacs:
-        for thl in thl_range:
-            if not thl in counts_dict[pixel_dac].keys():
-                continue
+        for pixel in range(256):
+            for thl in thl_range:
+                if thl not in counts_dict[pixel_dac].keys():
+                    continue
 
-            for pixel in range(256):
                 if counts_dict[pixel_dac][thl][pixel] > noise_limt:
                     noise_thl[pixel_dac][pixel] = thl
                     gauss_dict[pixel_dac].append(thl)
+                    break
 
     return gauss_dict, noise_thl
 

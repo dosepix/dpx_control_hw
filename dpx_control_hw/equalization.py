@@ -22,7 +22,6 @@ class Equalization(dpx_functions.DPXFunctions):
     def threshold_equalization(self,
             thl_step=1,
             noise_limit=0,
-            thl_offset=0,
             n_evals=3,
             use_gui=False
         ):
@@ -33,17 +32,38 @@ class Equalization(dpx_functions.DPXFunctions):
             yield {'stage': 'Init'}
 
         # Set PC Mode in OMR in order to read kVp values
-        omr = self.set_pc_mode()
-        print('OMR set to:', omr)
+        self.set_pc_mode()
+        print('OMR set to:', self.dpx.dpf.read_omr())
 
         counts_dict_gen = self.get_thl_level(
             thl_range, ['3f'], n_evals=n_evals, use_gui=use_gui)
 
-        counts_dict = deque(counts_dict_gen, maxlen=1).pop()
+        if use_gui:
+            yield {'stage': 'THL_pre_start'}
+            for res in counts_dict_gen:
+                if 'status' in res.keys():
+                    yield {
+                        'stage': 'THL_pre',
+                        'status': np.round(res['status'], 4)
+                        }
+                elif 'DAC' in res.keys():
+                    yield {
+                        'stage': 'THL_pre_loop_start',
+                        'status': res['DAC']
+                        }
+                else:
+                    counts_dict = res['countsDict']
+        else:
+            counts_dict = deque(counts_dict_gen, maxlen=1).pop()
+
         gauss_dict, _ = support.get_noise_level(
             counts_dict, thl_range, ['3f'], noise_limit)
+        print(np.asarray(gauss_dict['3f']).shape)
+        plt.hist(gauss_dict['3f'], bins=100)
+        plt.show()
 
-        thl_new = int(np.median(gauss_dict['3f']) - 3 * np.std(gauss_dict['3f']))
+        # thl_new = int(np.median(gauss_dict['3f']) - sigma * np.std(gauss_dict['3f']))
+        thl_new = int( np.min(gauss_dict['3f']) )
         self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
         pixel_dacs = np.asarray([63] * 256, dtype=int)
 
@@ -61,7 +81,6 @@ class Equalization(dpx_functions.DPXFunctions):
             noisy_pixels = len(pc_noisy)
 
             pixel_dacs[pc_noisy] -= 1
-            print(pixel_dacs)
             self.write_pixel_dacs(''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs]))
             loop_cnt += 1
 
@@ -75,10 +94,13 @@ class Equalization(dpx_functions.DPXFunctions):
 
         # Convert to code string
         pixel_dacs = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
+        print('THL:', '%04x' % int(thl_new))
+        print('Pixel DACs:', pixel_dacs)
+        print('Conf mask:', conf_mask)
 
         if use_gui:
             yield {'stage': 'finished',
-                    'pixel_DAC': pixel_dacs,
+                    'pixelDAC': pixel_dacs,
                     'THL': '%04x' % int(thl_new),
                     'confMask': conf_mask}
         else:
