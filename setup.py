@@ -28,5 +28,9 @@ setuptools.setup(name='dpx_control_hw',
     },
     install_requires=[
         'numpy',
+        'scipy',
+        'matplotlib',
+        'tqdm',
+        'pyserial',
     ]
 )
