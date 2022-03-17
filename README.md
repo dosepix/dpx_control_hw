@@ -81,13 +81,16 @@ Important parameters are:
 
 | Parameter | Function |
 | :-------- | :------- |
-| `port_name`           | Name of the used com-port of the PC. For Linux, it usually is `/dev/ttyUSB0`. For Windows, the port name has the form of 'COMX'. |
-| `config_fn`           | Configuration file containing important parameters of the used Dosepix detectors. |
+| `port_name`          | Name of the used com-port of the PC. For Linux, it usually is `/dev/ttyACM0`. For Windows, the port name has the form of `COMX`. |
+| `config_fn`          | Configuration file containing important parameters of the used Dosepix detectors. |
+| `params_fn`          | File containing the calibration curve parameters (a, b, c, t) for each detector and pixel. Only needed for dose measurements as it is used to specify the bin edges in Dosi-mode. |
+| `thl_calib_fn`       | The DAC value and corresponding voltage of the threshold (THL) show a dependency of a sloped sawtooth. By measuring this dependency, a corrected threshold value can be used. Only important for certain tasks like threshold equalization or threshold scan measurements. |
+| `bin_edges_fn`       | File containing the bin edges used in DosiMode. If `params_fn` is set, the file should contain the bin edges in energy. Else, it should contain the bin edges in ToT. |
 
-A measurement is started by using the `dpx` object. For example a ToT-measurement:
+Measurement are started by using the `dpx.dpf` object. For example a ToT-measurement:
 
 ```python
-dpx.measure_tot()
+dpx.dpf.measure_tot()
 ```
 
-See documentation for more info.
+See the example scripts in the `measure`-folder for more details.

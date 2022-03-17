@@ -63,7 +63,7 @@ class Equalization(dpx_functions.DPXFunctions):
         plt.show()
 
         # thl_new = int(np.median(gauss_dict['3f']) - sigma * np.std(gauss_dict['3f']))
-        thl_new = int( np.min(gauss_dict['3f']) )
+        thl_new = int( np.median(gauss_dict['3f']) )
         self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
         pixel_dacs = np.asarray([63] * 256, dtype=int)
 

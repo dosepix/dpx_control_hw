@@ -2,8 +2,38 @@ import os
 import json
 import numpy as np
 
-def val_to_idx(pixel_dacs, gauss_dict, noise_thl,
-    thl_edges_low=None, thl_edges_high=None, thl_fit_params=None):
+def fill_param_dict(param_d):
+    '''
+    Fill missing entries with mean parameters
+    '''
+    # Get mean factors
+    mean_dict = {}
+    key_list = ['a', 'c', 'b', 't']
+
+    for key in key_list:
+        val_list = []
+        for pixel in param_d.keys():
+            val_list.append( param_d[pixel][key] )
+        val_list = np.asarray(val_list)
+        val_list[abs(val_list) == np.inf] = np.nan
+        mean_dict[key] = np.nanmean(val_list)
+
+    # Find non existent entries and loop
+    new_param_d = {}
+    for pixel in set(np.arange(256)) - set(param_d.keys()):
+        new_param_d[pixel] = {val: mean_dict[val] for val in key_list}
+
+    return new_param_d
+
+# === Threshold Equalization ===
+def val_to_idx(
+        pixel_dacs,
+        gauss_dict,
+        noise_thl,
+        thl_edges_low=None,
+        thl_edges_high=None,
+        thl_fit_params=None
+    ):
     # Transform values to indices
     mean_dict = {}
     for pixel_dac in pixel_dacs:
@@ -22,7 +52,12 @@ def val_to_idx(pixel_dacs, gauss_dict, noise_thl,
 
     return mean_dict, noise_thl
 
-def get_volt_from_thl_fit(thl_edges_low, thl_edges_high, thl_fit_params, thl):
+def get_volt_from_thl_fit(
+        thl_edges_low,
+        thl_edges_high,
+        thl_fit_params,
+        thl
+    ):
     if (thl_edges_low is None) or (len(thl_edges_low) == 0):
         return thl
 
@@ -34,7 +69,12 @@ def get_volt_from_thl_fit(thl_edges_low, thl_edges_high, thl_fit_params, thl):
                 return erf_std_fit(thl, *params)
             return linear_fit(thl, *params)
 
-def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=0):
+def get_noise_level(
+        counts_dict,
+        thl_range,
+        pixel_dacs=['00', '3f'],
+        noise_limt=0
+    ):
     # Get noise THL for each pixel
     noise_thl = {key: np.zeros(256) for key in pixel_dacs}
     gauss_dict = {key: [] for key in pixel_dacs}
@@ -54,7 +94,11 @@ def get_noise_level(counts_dict, thl_range, pixel_dacs=['00', '3f'], noise_limt=
     return gauss_dict, noise_thl
 
 # === Periphyery DACs ===
-def split_perihpery_dacs(code, perc=False, show=False):
+def split_perihpery_dacs(
+        code,
+        perc=False,
+        show=False
+    ):
     if perc:
         perc_eight_bit = float(2**8)
         perc_nine_bit = float(2**9)
@@ -98,7 +142,10 @@ def split_perihpery_dacs(code, perc=False, show=False):
 
     return d_periphery
 
-def perihery_dacs_dict_to_code(d_periphery, perc=False):
+def perihery_dacs_dict_to_code(
+        d_periphery,
+        perc=False
+    ):
     if perc:
         perc_eight_bit = float(2**8)
         perc_nine_bit = float(2**9)
@@ -132,7 +179,7 @@ def make_directory(directory):
         if len(dir_front_split) >= 2:
             if dir_front_split[-1].isdigit():
                 dir_num = int(dir_front_split[-1]) + 1
-                directory = ''.join(dir_front_split[:-1]) + '_' + str(dir_num) + '/'
+                directory = '_'.join(dir_front_split[:-1]) + '_' + str(dir_num) + '/'
             else:
                 directory = dir_front + '_1/'
         else:
@@ -141,7 +188,11 @@ def make_directory(directory):
     os.makedirs(directory)
     return directory
 
-def json_dump(out_dict, out_fn, overwrite=False):
+def json_dump(
+        out_dict,
+        out_fn,
+        overwrite=False
+    ):
     file_ending = '.json'
 
     # Check if file already exists
@@ -159,7 +210,7 @@ def json_dump(out_dict, out_fn, overwrite=False):
             if len(out_fn_front_split) >= 2:
                 if out_fn_front_split[-1].isdigit():
                     fn_num = int( out_fn_front_split[-1] ) + 1
-                    out_fn = ''.join(out_fn_front_split[:-1]) + '_' + str(fn_num) + file_ending
+                    out_fn = '_'.join(out_fn_front_split[:-1]) + '_' + str(fn_num) + file_ending
                 else:
                     out_fn = out_fn_front + '_1' + file_ending
             else:
@@ -182,6 +233,19 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
+# === Conversion functions ===
+def get_thl(p_a, p_b, p_c, p_t):
+    return 1./(2*p_a) *\
+        ( p_t*p_a - p_b + np.sqrt((p_b + p_t*p_a)**2 - 4*p_a*p_c) )
+
+def energy_to_tot(val, p_a, p_b, p_c, p_t):
+    return np.where(val >= get_thl(p_a, p_b, p_c, p_t),
+        p_a*val + p_b + float(p_c)/(val - p_t), 0)
+
+def tot_to_energy(val, p_a, p_b, p_c, p_t):
+    return 1./(2*p_a) *\
+        ( p_t*p_a + val - p_b + np.sqrt((p_b + p_t*p_a - val)**2 - 4*p_a*p_c) )
+
 # === Fit functions ===
 def linear_fit(x, m, t):
     return m * x + t
@@ -189,3 +253,10 @@ def linear_fit(x, m, t):
 def erf_std_fit(x, a, b, c, d):
     from scipy.special import erf
     return a * (erf((x - b) / c) + 1) + d
+
+# === ETC ===
+def infinite_for():
+    idx = 0
+    while True:
+        yield idx
+        idx += 1

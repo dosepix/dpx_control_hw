@@ -27,7 +27,6 @@ def read_config(config_fn):
     """
 
     config = configparser.ConfigParser()
-    print(config_fn)
     config.read(config_fn)
 
     # Mandatory sections
@@ -51,9 +50,9 @@ def read_config(config_fn):
         conf_bits = '00' * 256
 
     # pixel_DAC
-    assert 'pixel_DAC' in config['Equalisation'], \
-        'Config: pixel_DAC has to be specified in Equalisation section!'
-    pixel_dacs = config['Equalisation']['pixel_DAC']
+    assert 'pixeldac' in config['Equalisation'], \
+        'Config: pixeldac has to be specified in Equalisation section!'
+    pixel_dacs = config['Equalisation']['pixeldac']
 
     # bin_edges - optional field
     bin_edges = None
@@ -230,3 +229,77 @@ def thl_calib_to_edges(thl_calib_d, thres=100):
 
     thl_edges_high.append( 8190 )
     return thl_edges_low, thl_edges_high, edge_d
+
+def load_bin_edges(
+        bin_edges_fn=None,
+        params_d=None
+    ):
+    # Check if bin edges are given as list or file
+    if bin_edges_fn is not None:
+        # List
+        if isinstance(bin_edges_fn, list):
+            bin_edges = bin_edges_fn
+        else:
+            if bin_edges_fn.endswith('.json'):
+                with open(bin_edges_fn, 'r') as bin_edges_file:
+                    bin_edges = json.load( bin_edges_file )
+            else:
+                return None
+
+        # If same bin edges are used for all pixels
+        if len(bin_edges) < 256:
+            bin_edges = np.asarray([bin_edges] * 256).T
+
+        if params_d is None:
+            return get_single_thresholds(bin_edges)
+        return get_single_thresholds_energy(params_d, bin_edges)
+
+    # Standard bin edges
+    gray_idx = [0, 1, 3, 2, 6, 4, 5, 7, 15, 13, 12, 14, 10, 11, 9, 8]
+    cmd_total = []
+    for bin_edge in range(16):
+        cmd = ('%01x' % gray_idx[bin_edge] + '%03x' % (20 * bin_edge + 15)) * 256
+        cmd_total.append( cmd )
+    return cmd_total
+
+def get_single_thresholds(bin_edges):
+    # The indices of the bins are specified via the following gray code
+    gray_idx = [0, 1, 3, 2, 6, 4, 5, 7, 15, 13, 12, 14, 10, 11, 9, 8]
+
+    cmd_total = []
+    for idx, gray in enumerate(gray_idx):
+        # Construct command
+        cmd = ''.join( [
+            ('%01x' % gray) + ('%03x' % int(bin_edge)) for bin_edge in bin_edges[idx]
+            ] )
+        cmd_total.append( cmd )
+    return cmd_total
+
+def get_single_thresholds_energy(
+        params_d,
+        bin_edges
+    ):
+    # Fill missing parameters with mean values of all pixels
+    if len(params_d) != 256:
+        params_d = support.fill_param_dict(params_d)
+
+    bin_edges = np.asarray( bin_edges ).T
+    bin_edges_list = []
+    for pixel in sorted(params_d.keys()):
+        params = params_d[pixel]
+
+        bin_edges_energy = bin_edges[pixel]
+        bin_edges_tot = support.energy_to_tot(
+            bin_edges_energy, params['a'], params['b'], params['c'], params['t']
+        )
+
+        # Round the values - do not use floor function as this leads to bias
+        bin_edges_tot = np.around( bin_edges_tot )
+        bin_edges_tot = np.nan_to_num( bin_edges_tot )
+        bin_edges_tot[bin_edges_tot < 0] = 0
+        bin_edges_tot[bin_edges_tot > 4095] = 4095
+        bin_edges_list.append( bin_edges_tot )
+
+    # Transpose matrix to get pixel values
+    bin_edges_list = np.asarray( bin_edges_list ).T
+    return get_single_thresholds( bin_edges_list )
