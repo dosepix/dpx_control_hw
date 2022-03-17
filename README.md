@@ -73,7 +73,7 @@ import dpx_control_hw
 The connection to the Dosepix readout hardware is established via:
 
 ```python
-dpx = dpx_control.Dosepix(port_name, config_fn=None)
+dpx = dpx_control_hw.Dosepix(port_name, config_fn=None)
 ```
 
 This creates an object `dpx` of class `Dosepix`.  
