@@ -129,7 +129,10 @@ class DPXFunctions():
     def read_tot(self):
         self.comm.send_cmd('READ_TOT', write=False)
         res = self.comm.get_data(size=512)
-        return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
+        if res:
+            return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
+        else:
+            return np.zeros(256).tolist()
 
     def read_dosi(self):
         self.comm.send_cmd('READ_DOSI', write=False)
@@ -159,7 +162,6 @@ class DPXFunctions():
             save_frames=save_frames,
             out_dir=out_dir,
             meas_time=meas_time,
-            make_hist=make_hist,
             use_gui=use_gui
         )
 
@@ -175,7 +177,6 @@ class DPXFunctions():
         save_frames=None,
         out_dir='tot_measurement/',
         meas_time=None,
-        make_hist=False,
         use_gui=False
     ):
         # Activate dosi mode
@@ -201,11 +202,7 @@ class DPXFunctions():
             frame_last = np.zeros(256)
             frame_num = 0
 
-            if make_hist:
-                frame_list = np.zeros((256, 8192))
-            else:
-                frame_list = []
-            plot_hist = np.zeros(4096)
+            frame_list = []
             time_list = []
 
             self.data_reset()
@@ -227,15 +224,10 @@ class DPXFunctions():
                 if use_gui:
                     yield frame
 
-                plot_hist[frame] += 1
                 # Show readout speed
                 if (frame_num > 0) and not (frame_num % 10):
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
-
-                if make_hist:
-                    frame_list += frame
-                else:
-                    frame_list.append( frame.tolist() )
+                frame_list.append( frame.tolist() )
 
                 if (save_frames is not None) and (frame_num <= save_frames):
                     # Only save if gui is not used

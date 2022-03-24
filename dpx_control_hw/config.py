@@ -50,9 +50,9 @@ def read_config(config_fn):
         conf_bits = '00' * 256
 
     # pixel_DAC
-    assert 'pixeldac' in config['Equalisation'], \
-        'Config: pixeldac has to be specified in Equalisation section!'
-    pixel_dacs = config['Equalisation']['pixeldac']
+    assert 'pixel_dac' in config['Equalisation'], \
+        'Config: pixel_dac has to be specified in Equalisation section!'
+    pixel_dacs = config['Equalisation']['pixel_dac']
 
     # bin_edges - optional field
     bin_edges = None
