@@ -23,9 +23,11 @@ class Equalization(dpx_functions.DPXFunctions):
             thl_step=1,
             noise_limit=0,
             n_evals=3,
-            use_gui=False
+            use_gui=False,
+            plot=True
         ):
 
+        pixel_dac_settings = ['00', '3f']
         thl_range = self.get_thl_range(thl_step=thl_step)
         print('== Threshold equalization ==')
         if use_gui:
@@ -36,7 +38,7 @@ class Equalization(dpx_functions.DPXFunctions):
         print('OMR set to:', self.dpx.dpf.read_omr())
 
         counts_dict_gen = self.get_thl_level(
-            thl_range, ['3f'], n_evals=n_evals, use_gui=use_gui)
+            thl_range, pixel_dac_settings, n_evals=n_evals, use_gui=use_gui)
 
         if use_gui:
             yield {'stage': 'THL_pre_start'}
@@ -57,15 +59,27 @@ class Equalization(dpx_functions.DPXFunctions):
             counts_dict = deque(counts_dict_gen, maxlen=1).pop()
 
         gauss_dict, _ = support.get_noise_level(
-            counts_dict, thl_range, ['3f'], noise_limit)
-        print(np.asarray(gauss_dict['3f']).shape)
-        plt.hist(gauss_dict['3f'], bins=100)
-        plt.show()
+            counts_dict, thl_range, pixel_dac_settings, noise_limit)
 
-        # thl_new = int(np.median(gauss_dict['3f']) - sigma * np.std(gauss_dict['3f']))
-        thl_new = int( np.median(gauss_dict['3f']) )
+        means = {}
+        for pixel_dac in pixel_dac_settings:
+            means[pixel_dac] = np.median(gauss_dict[pixel_dac])
+
+        thl_new = int((means['00'] + means['3f']) // 2)
+        print(thl_new)
+        if not use_gui and plot:
+            for pixel_dac in pixel_dac_settings:
+                plt.hist(gauss_dict[pixel_dac], bins=30)
+            plt.axvline(x=thl_new, ls='--', color='k')
+            plt.xlabel('THL')
+            plt.show()
+
+        # sigma = 2
+        # thl_new = int(np.median(gauss_dict[pixel_dac_setting]) - sigma * np.std(gauss_dict[pixel_dac_setting]))
+        # thl_new = int( np.median(gauss_dict[pixel_dac_setting]) )
+        # thl_new = np.min(gauss_dict[pixel_dac_setting])
         self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
-        pixel_dacs = np.asarray([63] * 256, dtype=int)
+        pixel_dacs = np.asarray([0] * 256, dtype=int)
 
         noisy_pixels = 256
         loop_cnt = 0
@@ -75,26 +89,32 @@ class Equalization(dpx_functions.DPXFunctions):
                 self.data_reset()
                 time.sleep(0.01)
                 pc_data += np.asarray(self.read_pc())
+            print(pc_data)
 
             # Noisy pixels
             pc_noisy = np.argwhere(pc_data > 0).flatten()
             noisy_pixels = len(pc_noisy)
 
-            pixel_dacs[pc_noisy] -= 1
-            self.write_pixel_dacs(''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs]))
+            pixel_dacs[pc_noisy] += 1
+            pixel_dac_str = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
+            print(pixel_dac_str)
+            self.write_pixel_dacs(pixel_dac_str)
             loop_cnt += 1
 
-        pixel_dacs[pixel_dacs < 63] -= 10
-        pixel_dacs[pixel_dacs < 0] = 0
+        pixel_dacs[pixel_dacs < 0] += 5
+        pixel_dacs[pixel_dacs > 63] = 63
+        # pixel_dacs[pixel_dacs < 63] -= 10
+        # pixel_dacs[pixel_dacs < 0] = 0
 
         conf_mask = np.zeros(256).astype(str)
         conf_mask.fill('00')
-        conf_mask[pixel_dacs <= 0] = '%02x' % (0b1 << 2)
+        conf_mask[pixel_dacs >= 63] = '%02x' % (0b1 << 2)
         conf_mask = ''.join(conf_mask)
 
         # Convert to code string
         pixel_dacs = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
-        print('THL:', '%04x' % int(thl_new))
+
+        print('THL:', thl_new) # '%04x' % int(thl_new))
         print('Pixel DACs:', pixel_dacs)
         print('Conf mask:', conf_mask)
 
@@ -167,7 +187,7 @@ class Equalization(dpx_functions.DPXFunctions):
                 for _ in range( n_evals ):
                     self.data_reset()
                     counts += self.read_pc()
-                counts /= n_evals
+                # counts /= n_evals
                 # print(counts)
                 counts_dict[pixel_dac][int(thl)] = counts
 
