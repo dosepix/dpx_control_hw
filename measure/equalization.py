@@ -15,6 +15,9 @@ def main():
     )
 
     config_fn = 'config.conf'
+
+    thl_calib_d = dpx.dpf.measure_thl(out_fn=None, plot=False)
+    dpx.set_thl_calib(thl_calib_d)
     dpx.equalization(config_fn=config_fn)
 
 if __name__ == '__main__':

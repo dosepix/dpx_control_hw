@@ -134,6 +134,13 @@ class Dosepix():
                 return None
         return None
 
+    def set_thl_calib(self, thl_calib_d):
+        thl_low, thl_high, thl_fit_params, thl_edges = config.load_thl_edges(thl_calib_d)
+        self.thl_edges_low = thl_low
+        self.thl_edges_high = thl_high
+        self.thl_fit_params = thl_fit_params
+        self.thl_edges = thl_edges
+
     def init_dpx(self):
         self.connect()
         self.comm = communicate.Communicate(self.ser, debug=False)
