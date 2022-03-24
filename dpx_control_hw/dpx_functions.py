@@ -132,8 +132,8 @@ class DPXFunctions():
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
         else:
-            return np.zeros(256).tolist()
-
+            return np.zeros(256)
+            
     def read_dosi(self):
         self.comm.send_cmd('READ_DOSI', write=False)
         res = self.comm.get_data(size=512)
@@ -162,6 +162,7 @@ class DPXFunctions():
             save_frames=save_frames,
             out_dir=out_dir,
             meas_time=meas_time,
+            make_hist=make_hist,
             use_gui=use_gui
         )
 
@@ -177,13 +178,14 @@ class DPXFunctions():
         save_frames=None,
         out_dir='tot_measurement/',
         meas_time=None,
+        make_hist=False,
         use_gui=False
     ):
         # Activate dosi mode
         self.dpx.omr = self.set_dosi_mode()
 
         # Check if output directory exists
-        if not use_gui:
+        if not use_gui and out_dir is not None:
             out_dir = support.make_directory(out_dir)
             if out_dir.endswith('/'):
                 out_dir_ = out_dir[:-1]
@@ -191,6 +193,8 @@ class DPXFunctions():
                 out_fn = out_dir_.split('/')[-1] + '.json'
             else:
                 out_fn = out_dir_ + '.json'
+        else:
+            out_fn = None
 
         # Data reset
         self.data_reset()
@@ -202,8 +206,16 @@ class DPXFunctions():
             frame_last = np.zeros(256)
             frame_num = 0
 
-            frame_list = []
-            time_list = []
+            # if make_hist:
+            #    frame_list = np.zeros((256, 8192))
+            # else:
+            #frame_list = []
+            plot_hist = np.zeros(4096)
+            pixel_list = []
+            for pix in range(256):
+                empty_pixel_list = []
+                pixel_list.append(empty_pixel_list)
+            #time_list = []
 
             self.data_reset()
             while True:
@@ -213,7 +225,7 @@ class DPXFunctions():
 
                 # Frame readout
                 frame = np.asarray( self.read_tot() )
-                time_list.append(time.time() - start_time)
+                #time_list.append(time.time() - start_time)
                 frame_filt = np.argwhere(frame - frame_last == 0)
                 frame_last = np.array(frame, copy=True)
                 frame[frame_filt] = 0
@@ -224,33 +236,50 @@ class DPXFunctions():
                 if use_gui:
                     yield frame
 
+                # plot_hist[frame] += 1
                 # Show readout speed
                 if (frame_num > 0) and not (frame_num % 10):
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
-                frame_list.append( frame.tolist() )
+
+                # if make_hist:
+                #    frame_list += frame
+                # else:
+                #frame_list.append( frame.tolist() )
+                
+                for pix in range(256):
+                    if not frame.tolist()[pix] == 0:
+                        pixel_list[pix].append(frame.tolist()[pix]) 
+                
+                #print(pixel_list)
+                
+                #print(frame.tolist())
+                frame_num += 1
 
                 if (save_frames is not None) and (frame_num <= save_frames):
                     # Only save if gui is not used
                     if not use_gui:
-                        self.measure_tot_save(frame_list, time_list,
+                        self.measure_tot_save(pixel_list,
                             out_dir, out_fn, start_time)
 
                         # Reset for next save
-                        frame_list, time_list = [], []
+                        #pixel_list = []
 
-                    frame_num = 0
-                frame_num += 1
+                    #    frame_num = 0                
+            print(pixel_list)
 
-            self.measure_save(frame_list, time_list,
-                out_dir + out_fn, start_time)
+            if out_dir is not None and out_fn is not None:
+                self.measure_save(pixel_list,
+                    out_dir + out_fn, start_time)
 
             if use_gui:
-                yield {'Slot1': frame_list}
+                yield {'Slot1': pixel_list}
             else:
-                yield frame_list
+                yield pixel_list
+                
+            pixel_list = []
 
         except (KeyboardInterrupt, SystemExit):
-            if not use_gui:
+            if not use_gui or (out_dir is not None and out_fn is not None):
                 self.measure_save(frame_list, time_list,
                     out_dir + out_fn, start_time)
             if use_gui:
@@ -340,16 +369,15 @@ class DPXFunctions():
 
     @classmethod
     def measure_save(cls,
-            frame_list, 
-            time_list,
+            pixel_list,
             out_fn,
             start_time=None
         ):
-        out_dict = {'frames': frame_list, 'time': time_list}
+        out_dict = {'pixel': pixel_list}
         support.json_dump(out_dict, out_fn)
         if start_time is not None:
             print('Registered %d events in %.2f minutes' %\
-                (np.count_nonzero(frame_list), (time.time() - start_time) / 60.))
+                (np.count_nonzero(pixel_list), (time.time() - start_time) / 60.))
         return out_dict
 
     def measure_adc(
