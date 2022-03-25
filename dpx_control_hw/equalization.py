@@ -26,6 +26,8 @@ class Equalization(dpx_functions.DPXFunctions):
             use_gui=False,
             plot=True
         ):
+        noise_limit = 10
+        n_evals = 1
 
         num_dacs = 8
         pixel_dac_settings = ['%02x' % pixel_dac for pixel_dac in np.arange(0, 63 + 1, 64 // num_dacs)] + ['3f']
@@ -95,7 +97,7 @@ class Equalization(dpx_functions.DPXFunctions):
 
         if not use_gui and plot:
             plot_x = [int(pixel_dac, 16) for pixel_dac in pixel_dac_settings]
-            for idx in range(4):
+            for idx in range(16):
                 color = 'C%d' % idx
                 plot_y = [noise_thl[pixel_dac][idx] for pixel_dac in pixel_dac_settings]
                 plt.plot(
@@ -109,7 +111,7 @@ class Equalization(dpx_functions.DPXFunctions):
             plt.show()
 
         # Set new pixel dacs and find THL again
-        pixel_dac_new = ''.join(['%02x' % entry for entry in adjust.flatten()])
+        pixel_dac_new = ''.join(['%02x' % entry for entry in adjust])
         print('New pixel dac', pixel_dac_new)
 
         counts_dict_new_gen = self.get_thl_level(
@@ -141,9 +143,11 @@ class Equalization(dpx_functions.DPXFunctions):
 
         # Plot THL distributions for different pixel dac settings
         if not use_gui and plot:
+            bins = 30
             for pixel_dac in pixel_dac_settings:
-                plt.hist(noise_thl[pixel_dac], bins=30)
-            plt.hist(noise_thl_new[pixel_dac_new], bins=30)
+                plt.hist(noise_thl[pixel_dac].flatten(), bins=bins, alpha=.5)
+            plt.hist(noise_thl_new[pixel_dac_new].flatten(),
+                bins=bins, alpha=.5, color='k')
             plt.axvline(x=thl_mean, ls='--', color='k')
             plt.xlabel('THL')
             plt.show()

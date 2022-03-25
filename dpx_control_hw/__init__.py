@@ -53,6 +53,7 @@ class Dosepix():
         self.comm = None
         self.dpf = None
         self.equal = None
+        self.support = support
 
         # Init connection
         self.init_dpx()

@@ -131,8 +131,7 @@ class DPXFunctions():
         res = self.comm.get_data(size=512)
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
-        else:
-            return np.zeros(256).tolist()
+        return np.zeros(256).tolist()
 
     def read_dosi(self):
         self.comm.send_cmd('READ_DOSI', write=False)
