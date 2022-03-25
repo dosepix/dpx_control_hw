@@ -27,7 +27,8 @@ class Equalization(dpx_functions.DPXFunctions):
             plot=True
         ):
 
-        pixel_dac_settings = ['00', '3f']
+        num_dacs = 8
+        pixel_dac_settings = ['%02x' % pixel_dac for pixel_dac in np.arange(0, 63 + 1, 64 // num_dacs)] + ['3f']
         thl_range = self.get_thl_range(thl_step=thl_step)
         print('== Threshold equalization ==')
         if use_gui:
@@ -72,12 +73,20 @@ class Equalization(dpx_functions.DPXFunctions):
         thl_mean = int( (mean_dict['00'] + mean_dict['3f']) // 2 )
 
         # Calculate slope, offset and mean
-        slope = (noise_thl['3f'] - noise_thl['00']) / 63.
-        offset = noise_thl['00']
+        pixel_dac_nums = np.asarray([int(pixel_dac, 16) for pixel_dac in pixel_dac_settings])
+        noise_thls = np.asarray( [noise_thl[pixel_dac] for pixel_dac in pixel_dac_settings] ).T
+        close_idx = np.argsort(np.abs(noise_thls - thl_mean), axis=1)[:,:2]
+        close_idx = np.sort(close_idx, axis=1)
+
+        noise_thl_first = [noise_thls[pixel][[close_idx[pixel, 0]]][0] for pixel in np.arange(256)]
+        noise_thl_second = [noise_thls[pixel][[close_idx[pixel, 1]]][0] for pixel in np.arange(256)]
+        noise_thl_first, noise_thl_second = np.asarray(noise_thl_first), np.asarray(noise_thl_second)
+        slope = np.abs(noise_thl_first - noise_thl_second) / (64 / (num_dacs - 1))
+        offset = np.nanmax([noise_thl_first, noise_thl_second], axis=0)
 
         # Get adjustment value for each pixel
-        adjust = np.asarray((thl_mean - offset) / slope - 0.5, dtype=int)
-        print(adjust)
+        adjust = np.asarray((offset - thl_mean) / slope, dtype=int)
+        adjust += pixel_dac_nums[close_idx[:,0]]
 
         # Consider extreme values
         adjust[np.isnan(adjust)] = 0
@@ -85,12 +94,17 @@ class Equalization(dpx_functions.DPXFunctions):
         adjust[adjust < 0] = 0
 
         if not use_gui and plot:
-            for idx in range(16):
+            plot_x = [int(pixel_dac, 16) for pixel_dac in pixel_dac_settings]
+            for idx in range(4):
+                color = 'C%d' % idx
+                plot_y = [noise_thl[pixel_dac][idx] for pixel_dac in pixel_dac_settings]
                 plt.plot(
-                    [0, adjust[idx], 63],
-                    [noise_thl['00'][idx], thl_mean, noise_thl['3f'][idx]],
-                    marker='x'
+                    plot_x,
+                    plot_y,
+                    marker='x',
+                    color=color
                 )
+                plt.axvline(x=adjust[idx], ls='--', color=color)
             plt.axhline(y=thl_mean, ls='--', color='k')
             plt.show()
 
@@ -139,44 +153,26 @@ class Equalization(dpx_functions.DPXFunctions):
         # thl_new = int( np.median(gauss_dict[pixel_dac_setting]) )
         # thl_new = np.min(gauss_dict[pixel_dac_setting])
         thl_new = int(np.median(gauss_dict_new[pixel_dac_new]))
-        self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
-        pixel_dacs = adjust.flatten() # np.asarray([0] * 256, dtype=int)
-        print(pixel_dacs)
+        self.dpx.dpf.write_pixel_dacs(pixel_dac_new)
+        pixel_dacs = adjust.flatten()
 
         noisy_pixels = 256
         loop_cnt = 0
         while noisy_pixels > 0 and loop_cnt < 63:
+            self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
             pc_data = np.zeros(256)
             for _ in range(3):
                 self.data_reset()
                 time.sleep(0.01)
                 pc_data += np.asarray(self.read_pc())
-            print(pc_data)
 
             noisy_pixels = len(pc_data[pc_data > 0])
             thl_new -= 1
-            self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_new)
-
-            # Noisy pixels
-            '''
-            pc_noisy = np.argwhere(pc_data > 0).flatten()
-            noisy_pixels = len(pc_noisy)
-
-            pixel_dacs[pc_noisy] += 1
-            pixel_dac_str = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
-            print(pixel_dac_str)
-            self.write_pixel_dacs(pixel_dac_str)
-            loop_cnt += 1
-            '''
-
-        # pixel_dacs[pixel_dacs < 0] += 5
-        #pixel_dacs[pixel_dacs > 63] = 63
-        # pixel_dacs[pixel_dacs < 63] -= 10
-        # pixel_dacs[pixel_dacs < 0] = 0
+        thl_new -= 10
 
         conf_mask = np.zeros(256).astype(str)
         conf_mask.fill('00')
-        conf_mask[pixel_dacs >= 63] = '%02x' % (0b1 << 2)
+        conf_mask[noisy_pixels > 0] = '%02x' % (0b1 << 2)
         conf_mask = ''.join(conf_mask)
 
         # Convert to code string
@@ -208,11 +204,11 @@ class Equalization(dpx_functions.DPXFunctions):
             print('Set pixel DACs to %s' % pixel_dac)
 
             # Set pixel DAC values to every pixel
-            pixel_code = pixel_dac * 256
+            if len(pixel_dac) > 2:
+                pixel_code = pixel_dac
+            else:
+                pixel_code = pixel_dac * 256
             self.write_pixel_dacs(pixel_code)
-
-            # Dummy readout
-            self.read_pc()
 
             # Noise measurement
             # Loop over THL values
@@ -223,7 +219,7 @@ class Equalization(dpx_functions.DPXFunctions):
             thl_range_fast = thl_range[::10]
             for cnt, thl in enumerate(thl_range_fast):
                 self.write_periphery(
-                    self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl))
+                    self.dpx.periphery_dacs[:-4] + '%04x' % int(thl)
                 )
                 self.data_reset()
                 # time.sleep(0.01)
@@ -249,7 +245,9 @@ class Equalization(dpx_functions.DPXFunctions):
                 loop_range = tqdm(thl_range_slow)
             for cnt, thl in enumerate(loop_range):
                 # Repeat multiple times since data is noisy
-                self.write_periphery(self.dpx.periphery_dacs[:-4] + ('%04x' % int(thl)))
+                self.write_periphery(
+                    self.dpx.periphery_dacs[:-4] + '%04x' % int(thl)
+                )
 
                 counts = np.zeros(256)
                 for _ in range( n_evals ):
@@ -261,7 +259,10 @@ class Equalization(dpx_functions.DPXFunctions):
                 # Return status as generator when using GUI
                 if use_gui:
                     yield {'status': float(cnt) / len(loop_range)}
-            print()
+
+            # for pixel in range(8):
+            #     plt.plot(thl_range_slow, [counts_dict[pixel_dac][int(thl)][pixel] for thl in thl_range_slow])
+            # plt.show()
         if use_gui:
             yield {'countsDict': counts_dict}
         else:
@@ -315,7 +316,7 @@ def get_noise_level(
         counts_dict,
         thl_range,
         pixel_dacs=['00', '3f'],
-        noise_limt=0
+        noise_limt=100
     ):
     # Get noise THL for each pixel
     noise_thl = {key: np.zeros(256) for key in pixel_dacs}

@@ -91,8 +91,8 @@ class Dosepix():
 
     def equalization(self, config_fn,
         thl_step=1,
-        noise_limit=0,
-        n_evals=3
+        noise_limit=10,
+        n_evals=1
     ):
         *_, last = self.equal.threshold_equalization(
             thl_step=thl_step,
