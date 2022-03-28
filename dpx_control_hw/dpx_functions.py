@@ -131,9 +131,8 @@ class DPXFunctions():
         res = self.comm.get_data(size=512)
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
-        else:
-            return np.zeros(256)
-            
+        return np.zeros(256)
+
     def read_dosi(self):
         self.comm.send_cmd('READ_DOSI', write=False)
         res = self.comm.get_data(size=512)
@@ -237,6 +236,7 @@ class DPXFunctions():
 
                 if make_hist:
                     px_idx = np.dstack([np.arange(256), frame])[0]
+                    px_idx[px_idx > 4095] = 0
                     px_idx = px_idx[px_idx[:,1] > 0]
 
                     frame_hist[px_idx[:,0], px_idx[:,1]] += 1
@@ -272,38 +272,26 @@ class DPXFunctions():
                         make_hist, start_time
                     )
 
-            if make_hist:
-                if use_gui:
-                    yield {'Slot1': frame_hist}
-                else:
-                    yield frame_hist
-            else:
-                if use_gui:
-                    yield {'Slot1': frame_list}
-                else:
-                    yield frame
-
         except (KeyboardInterrupt, SystemExit):
-            if not use_gui or (out_dir is not None and out_fn is not None):
+            print('Measurement interrupted!')
+        finally:
+            if not use_gui:
                 if make_hist:
                     data_save = frame_hist
                 else:
                     data_save = [frame_list, time_list]
-
+                if (out_dir is not None) and (out_fn is not None):
                     self.measure_save(
-                        data_save, out_dir, out_fn,
+                        data_save, out_dir + out_fn,
                         make_hist, start_time
                     )
-            if make_hist:
-                if use_gui:
+                yield data_save
+            else:
+                if make_hist:
                     yield {'Slot1': frame_hist}
                 else:
-                    yield frame_hist
-            else:
-                if use_gui:
                     yield {'Slot1': frame_list}
-                else:
-                    yield frame
+
 
     def measure_dosi(self,
         frame_time=10,
@@ -372,17 +360,12 @@ class DPXFunctions():
                 time_list.append( time.time() - meas_start )
                 if use_gui:
                     yield np.asarray( frame_list )
-
-            if out_fn is not None:
-                yield self.measure_save(
-                    frame_list, time_list,
-                    out_fn, make_hist, start_time
-                )
-
         except (KeyboardInterrupt, SystemExit):
+            print('Measurement interrupted!')
+        finally:
             if out_fn is not None:
                 yield self.measure_save(
-                    frame_list, time_list,
+                    [frame_list, time_list],
                     out_fn, make_hist, start_time
                 )
 
@@ -397,7 +380,7 @@ class DPXFunctions():
         if make_hist:
             out_dict = {'hist': data}
         else:
-            out_dict = {'frames': data[0], 'time': [1]}
+            out_dict = {'frames': data[0], 'time': data[1]}
         support.json_dump(out_dict, out_fn)
         if start_time is not None:
             if make_hist:
