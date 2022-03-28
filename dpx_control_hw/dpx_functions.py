@@ -1,3 +1,7 @@
+"""
+This class file contains functions to control the Dosepix detector
+and perform measurements.
+"""
 # pylint: disable=missing-function-docstring
 import time
 
@@ -10,79 +14,97 @@ from . import support
 from . import dpx_support
 
 class DPXFunctions():
+    """Control and measurement functions""" 
     def __init__(self, dpx, comm: communicate.Communicate):
         self.dpx = dpx
         self.comm = comm
 
     # === HARDWARE ===
     def enable_vdd(self):
+        """Enable VDD""" 
         self.comm.send_cmd('EN_VDD')
 
     def disable_vdd(self):
+        """Disable VDD"""
         self.comm.send_cmd('DISAB_VDD')
 
     def enable_bias(self):
+        """Enable bias-voltage"""
         self.comm.send_cmd('EN_BIAS')
 
     def disable_bias(self):
+        """Disable bias-voltage"""
         self.comm.send_cmd('DISAB_BIAS')
 
     def led_on(self):
+        """Turn flash-LED on"""
         self.comm.send_cmd('LED_ON')
 
     def led_off(self):
+        """Turn flash-LED off"""
         self.comm.send_cmd('LED_OFF')
 
     def read_adc(self):
+        """Read DPX-ADC"""
         self.comm.send_cmd('READ_ADC', write=False)
         res = self.comm.get_data(size=2)
         return ''.join( ['%02x' % int(r) for r in res[::-1]] )
 
     # === RESET ===
     def global_reset(self):
+        """Global reset"""
         self.comm.send_cmd('GLOBAL_RESET')
 
     def data_reset(self):
+        """Data reset"""
         self.comm.send_cmd('DATA_RESET')
 
     # === OMR ===
     def read_omr(self):
+        """Read OMR-register"""
         self.comm.send_cmd('READ_OMR', write=False)
         res = self.comm.get_data(size=3)
         return ''.join( ['%02x' % int(r) for r in res] )
 
     def write_omr(self, data):
+        """Write OMR-register"""
         self.comm.send_cmd('WRITE_OMR')
         self.comm.send_data_binary(data)
 
     def set_pc_mode(self):
+        """Set photon counting mode"""
         omr_code = '%04x' % (
             (int(self.dpx.omr, 16) & ~((0b11) << 22)) | (0b10 << 22))
         self.write_omr(omr_code)
         return omr_code
 
     def set_dosi_mode(self):
+        """Set dosi mode"""
         omr_code = '%06x' % (int(self.dpx.omr, 16) & ~((0b11) << 22))
         self.write_omr(omr_code)
         return omr_code
 
     # === PERIPHERY ====
     def read_periphery(self):
+        """Read periphery dacs"""
         self.comm.send_cmd('READ_PERIPHERY', write=False)
         res = self.comm.get_data(size=16)
         return ''.join( ['%02x' % r for r in res] )
 
     def write_periphery(self, data):
+        """Write periphery dacs"""
         self.comm.send_cmd('WRITE_PERIPHERY')
         self.comm.send_data_binary(data)
 
     # === PIXEL DAC ===
     def read_pixel_dacs(self):
+        """Read pixel dacs"""
         self.comm.send_cmd('READ_PIXEL_DAC', write=False)
         res = self.comm.get_data(size=256)
         return ''.join( ['%02x' % r for r in res] )
 
     def write_pixel_dacs(self, data):
+        """Write pixel dacs"""
         self.comm.send_cmd('WRITE_PIXEL_DAC')
 
         # Split in chunks
@@ -92,11 +114,13 @@ class DPXFunctions():
 
     # === CONF BITS ===
     def read_conf_bits(self):
+        """Read configuration bits"""
         self.comm.send_cmd('READ_CONFBITS', write=False)
         res = self.comm.get_data(size=256)
         return ''.join( ['%02x' % r for r in res] )
 
     def write_conf_bits(self, data):
+        """Write configuration bits"""
         self.comm.send_cmd('WRITE_CONFBITS')
         # Split in chunks
         for split in range(len(data) // 128):
@@ -105,6 +129,7 @@ class DPXFunctions():
 
     # === SINGLE THRESHOLD ===
     def write_single_threshold(self, data):
+        """Write single thresholds for dosi-mode"""
         self.comm.send_cmd('WRITE_DIGITHLS')
         for split in range(len(data) // 128):
             data_split = data[split*128:(split+1)*128]
@@ -112,21 +137,25 @@ class DPXFunctions():
 
     # === COLUMN SELECT ===
     def read_column_select(self):
+        """Read selected column"""
         self.comm.send_cmd('READ_COLSEL', write=False)
         res = self.comm.get_data(size=1)
         return res[0]
 
     def write_column_select(self, column):
+        """Select column"""
         self.comm.send_cmd('WRITE_COLSEL')
         self.comm.send_data_binary('%02x' % column)
 
     # === DATA ===
     def read_pc(self):
+        """Read data in photon counting mode"""
         self.comm.send_cmd('READ_PC', write=False)
         res = self.comm.get_data(size=256)
         return list(res)
 
     def read_tot(self):
+        """Read data in ToT-mode"""
         self.comm.send_cmd('READ_TOT', write=False)
         res = self.comm.get_data(size=512)
         if res:
@@ -134,12 +163,14 @@ class DPXFunctions():
         return np.zeros(256)
 
     def read_dosi(self):
+        """Read data in dosi-mode"""
         self.comm.send_cmd('READ_DOSI', write=False)
         res = self.comm.get_data(size=512)
         return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
 
     # === CLEAR BINS ===
     def clear_bins(self):
+        """Clear bins of dosi-mode"""
         self.data_reset()
         self.read_dosi()
 
@@ -156,6 +187,7 @@ class DPXFunctions():
         make_hist=True,
         use_gui=False
     ):
+        """Wrapper for generator measure_tot_gen"""
         gen = self.measure_tot_gen(
             frame_time=frame_time,
             save_frames=save_frames,
@@ -180,6 +212,46 @@ class DPXFunctions():
         make_hist=True,
         use_gui=False
     ):
+        """Perform measurement in ToT-mode. Implemented as a generator to
+        yield intermediate results when gui is used
+        Parameters
+        ----------
+        save_frames : int or None
+            ToT is measured in an endless loop. The data is written to file
+            after `save_frames` frames were processed. Additionally, Keyboard
+            Interrupts are caught in order to store data afterwards.
+            If `save_frames` is None, no intermediate files are created.
+        out_dir : str or None
+            Output directory in which the measurement files are stored.
+            A file is written after `save_frames` frames. If file already exists,
+            a number is appended to the filename and incremented. If `out_dir`
+            is `None`, no files are created.
+        meas_time : float, optional
+            If set, the measurement finishes after the given time in seconds.
+        make_hist : bool
+            If 'True', results are stored in a histogram per pixel. Otherwise,
+            results are on a frame by frame basis.
+        use_gui : bool
+            Set to `True` if module is used with the GUI application
+
+        Returns
+        -------
+        out : dict
+            Dictionary containing results according to `make_hist`. The returned
+            format also depends on `use_gui`.
+
+        Notes
+        -----
+        The function is optimized for long term ToT measurements. It runs in
+        an endless loop and waits for a keyboard interrupt. After `save_frames`
+        frames were processed, data is written to a file in the directory specified
+        via `out_dir`. Using these single files allows for a memory sufficient
+        method to store the data in histograms without loosing information and
+        without the necessecity to load the whole dataset at once. If no frame
+        information is required, `make_hist` should be used which directly returns
+        histogrammed ToT-spectra per pixel.
+        """
+
         # Activate dosi mode
         self.dpx.omr = self.set_dosi_mode()
 
@@ -300,6 +372,7 @@ class DPXFunctions():
         out_fn='dose_measurement.json',
         use_gui=False
     ):
+        """Wrapper for generator measure_dosi_gen"""
         gen = self.measure_dosi_gen(
             frame_time=frame_time,
             frames=frames,
@@ -320,8 +393,33 @@ class DPXFunctions():
         frames=10,
         freq=False,
         out_fn='dose_measurement.json',
-        make_hist=False,
         use_gui=False):
+        """Perform measurement in dosi-mode. Implemented as a generator to
+        yield intermediate results when gui is used
+        Parameters
+        ----------
+        frame_time : int
+            Integration time per frame. The specified time is implemented
+            as a pause between frame aqcuisitions
+        frames : int or None
+            Number of frames to record. If `None` is specified, an infinite
+            measurement is started
+        freq : bool
+            If `True`, data is stored as frequency, i.e. number of registered
+            events per frame are normalized with the acquisition duration
+        out_fn : str or None
+            Name of the output file to store results in. If file already exists,
+            a number is appended to the filename and incremented. If `out_fn`
+            is `None`, no file is created.
+        use_gui : bool
+            Set to `True` if module is used with the GUI application
+
+        Returns
+        -------
+        out : dict
+            Dictionary containing results. The returned
+            format also depends on `use_gui`.
+        """
 
         # Activate dosi mode
         self.dpx.omr = self.set_dosi_mode()
@@ -366,7 +464,7 @@ class DPXFunctions():
             if out_fn is not None:
                 yield self.measure_save(
                     [frame_list, time_list],
-                    out_fn, make_hist, start_time
+                    out_fn, False, start_time
                 )
 
     @classmethod
