@@ -10,7 +10,7 @@ from . import support
 
 class Equalization(dpx_functions.DPXFunctions):
     def get_thl_range(self,
-            thl_low=4000,
+            thl_low=5500,
             thl_high=6000,
             thl_step=1
         ):
@@ -30,10 +30,8 @@ class Equalization(dpx_functions.DPXFunctions):
             use_gui=False,
             plot=True
         ):
-        noise_limit = 10
-        n_evals = 1
-
-        pixel_dac_setting = ['1f']
+        # pixel_dac_setting = ['1f']
+        pixel_dac_setting = [''.join( ['%02x' % pixel_dac for pixel_dac in np.arange(64).tolist() * 4] )]
         thl_range = self.get_thl_range(thl_step=thl_step)
         print('== Threshold equalization ==')
         if use_gui:
@@ -66,53 +64,52 @@ class Equalization(dpx_functions.DPXFunctions):
 
         gauss_dict, noise_thl = get_noise_level(
             counts_dict, thl_range, pixel_dac_setting, noise_limit)
-
-        # Transform values to indices and get mean_dict
-        mean_dict, noise_thl = val_to_idx(
-            pixel_dac_setting, gauss_dict, noise_thl,
-            self.dpx.thl_edges_low,
-            self.dpx.thl_edges_high,
-            self.dpx.thl_fit_params)
+        print( noise_thl )
+        plt.plot(np.arange(64).tolist() * 4,
+            noise_thl[pixel_dac_setting[0]],
+            ls='', marker='x')
+        plt.show()
+        return
 
         # New THL
-        print( mean_dict )
-        thl_mean = int( mean_dict[pixel_dac_setting[0]] )
+        thl_mean = int( np.median(gauss_dict[pixel_dac_setting[0]]) )
+        print( self.dpx.periphery_dacs[:-4] + '%04x' % thl_mean )
         self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % thl_mean)
 
         # Plot THL distributions for different pixel dac settings
         if not use_gui and plot:
             bins = 30
-            plt.hist(noise_thl[pixel_dac_setting[0]].flatten(), bins=bins, alpha=.5)
+            plt.hist(gauss_dict[pixel_dac_setting[0]], bins=bins, alpha=.5)
             plt.axvline(x=thl_mean, ls='--', color='k')
             plt.xlabel('THL')
             plt.show()
 
-        pixel_dacs = np.asarray([int('1f', 16)] * 256)
+        pixel_dacs = np.asarray([int(pixel_dac_setting[0], 16)] * 256)
         noisy_pixels = np.asarray([True] * 256)
         n_noisy_pixels = 256
 
         loop_cnt = 0
         while n_noisy_pixels > 0 and loop_cnt < 63:
-            self.dpx.dpf.write_pixel_dacs(
-                ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
-            )
+            # np.random.shuffle( pixel_dacs )
+            pixel_dac_str = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
+            print( pixel_dac_str )
+            self.dpx.dpf.write_pixel_dacs(pixel_dac_str)
+            self.data_reset()
+            pc_data = np.asarray(self.read_pc())
 
-            pc_data = np.zeros(256)
-            for _ in range(3):
-                self.data_reset()
-                time.sleep(0.01)
-                pc_data += np.asarray(self.read_pc())
-            print( pc_data )
+            print( pixel_dacs )
+            print( pc_data.reshape((16, 16)) )
+            time.sleep(1)
 
             # Number of noisy pixels
             n_noisy_pixels = len(noisy_pixels[noisy_pixels])
-            pc_noisy = pc_data > 0
+            pc_noisy = pc_data > 3
 
             # Increase pixel-dac of noisy pixels
-            pixel_dacs[pc_noisy] += 1
+            pixel_dacs[pc_noisy] -= 1
 
             # Decrease pixel-dac of non-noisy pixels
-            pixel_dacs[~pc_noisy] -= 1
+            # pixel_dacs[~pc_noisy] -= 1
 
             # Ensure min and max values
             pixel_dacs[pixel_dacs < 0] = 0
@@ -210,9 +207,9 @@ class Equalization(dpx_functions.DPXFunctions):
                 if use_gui:
                     yield {'status': float(cnt) / len(loop_range)}
 
-            # for pixel in range(8):
-            #     plt.plot(thl_range_slow, [counts_dict[pixel_dac][int(thl)][pixel] for thl in thl_range_slow])
-            # plt.show()
+            for pixel in range(8):
+                plt.plot(thl_range_slow, [counts_dict[pixel_dac][int(thl)][pixel] for thl in thl_range_slow])
+            plt.show()
         if use_gui:
             yield {'countsDict': counts_dict}
         else:
