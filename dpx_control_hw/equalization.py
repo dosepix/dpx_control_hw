@@ -123,8 +123,16 @@ class Equalization(dpx_functions.DPXFunctions):
             print('-- Evolution of pixel-dacs for first 16 pixels --')
             for pixel in range(16):
                 color = 'C%d' % pixel
-                plt.step(np.arange(pixel_dacs_states.shape[1]), pixel_dacs_states[pixel], color=color)
-                plt.axhline(y=np.median(pixel_dacs_medians[pixel]), ls='--', color=color)
+                plt.step(
+                    np.arange(pixel_dacs_states.shape[1]),
+                    pixel_dacs_states[pixel], color=color
+                )
+                plt.axhline(
+                    y=np.median(pixel_dacs_medians[pixel]),
+                    ls='--', color=color
+                )
+            plt.xlabel('Iterations')
+            plt.ylabel('pixel-dac')
             plt.show()
 
         # Create conf mask to switch noisy pixels off
@@ -137,6 +145,7 @@ class Equalization(dpx_functions.DPXFunctions):
         # Convert to code string
         pixel_dacs = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
 
+        print('Bad pixels:', len(noisy_pixels[noisy_pixels]))
         print('THL:', thl_mean) # '%04x' % int(thl_new))
         print('Pixel DACs:', pixel_dacs)
         print('Conf mask:', conf_mask)

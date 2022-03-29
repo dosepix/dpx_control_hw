@@ -2,9 +2,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import dpx_control_hw as dch
-import numpy as np
-import matplotlib.pyplot as plt
-
 
 PORT = '/dev/ttyACM0'
 def main():
@@ -23,7 +20,7 @@ def main():
     tot_d = dpx.dpf.measure_tot(
         frame_time=0,
         save_frames=None,
-        out_dir='tot_measurement/',
+        out_dir=None,
         meas_time=5,
         make_hist=True,
         use_gui=False

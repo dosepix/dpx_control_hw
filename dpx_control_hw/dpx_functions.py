@@ -308,7 +308,7 @@ class DPXFunctions():
 
                 if make_hist:
                     px_idx = np.dstack([np.arange(256), frame])[0]
-                    px_idx[px_idx > 4095] = 0
+                    px_idx[px_idx >= 4095] = 0
                     px_idx = px_idx[px_idx[:,1] > 0]
 
                     frame_hist[px_idx[:,0], px_idx[:,1]] += 1

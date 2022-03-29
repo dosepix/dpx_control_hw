@@ -24,7 +24,8 @@ def main():
     # dpx.set_thl_calib(thl_calib_d)
     dpx.equalization(
         config_fn=config_fn,
-        thl_offset=30
+        thl_offset=25,
+        plot=True
     )
 
 if __name__ == '__main__':

@@ -94,14 +94,16 @@ class Dosepix():
         thl_step=1,
         noise_limit=10,
         n_evals=1,
-        thl_offset=0
+        thl_offset=0,
+        plot=False
     ):
         *_, last = self.equal.threshold_equalization(
             thl_step=thl_step,
             noise_limit=noise_limit,
             n_evals=n_evals,
             thl_offset=thl_offset,
-            use_gui=False
+            use_gui=False,
+            plot=plot
         )
         pixel_dacs, thl_new, conf_mask = last
         periphery_dacs = self.periphery_dacs[:-4] + thl_new
