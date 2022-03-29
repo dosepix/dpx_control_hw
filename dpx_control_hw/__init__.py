@@ -53,6 +53,7 @@ class Dosepix():
         self.comm = None
         self.dpf = None
         self.equal = None
+        self.support = support
 
         # Init connection
         self.init_dpx()
@@ -91,13 +92,15 @@ class Dosepix():
 
     def equalization(self, config_fn,
         thl_step=1,
-        noise_limit=0,
-        n_evals=3
+        noise_limit=10,
+        n_evals=1,
+        thl_offset=0
     ):
         *_, last = self.equal.threshold_equalization(
             thl_step=thl_step,
             noise_limit=noise_limit,
             n_evals=n_evals,
+            thl_offset=thl_offset,
             use_gui=False
         )
         pixel_dacs, thl_new, conf_mask = last
@@ -133,6 +136,13 @@ class Dosepix():
             else:
                 return None
         return None
+
+    def set_thl_calib(self, thl_calib_d):
+        thl_low, thl_high, thl_fit_params, thl_edges = config.load_thl_edges(thl_calib_d)
+        self.thl_edges_low = thl_low
+        self.thl_edges_high = thl_high
+        self.thl_fit_params = thl_fit_params
+        self.thl_edges = thl_edges
 
     def init_dpx(self):
         self.connect()
