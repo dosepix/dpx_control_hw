@@ -131,8 +131,9 @@ class DPXFunctions():
         res = self.comm.get_data(size=512)
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
-        return np.zeros(256).tolist()
-
+        else:
+            return np.zeros(256)
+            
     def read_dosi(self):
         self.comm.send_cmd('READ_DOSI', write=False)
         res = self.comm.get_data(size=512)
@@ -410,6 +411,7 @@ class DPXFunctions():
         meas_time = None,
         frame_time = 1,
         integration = True,
+        singlevalues = False,
         use_gui = False
     ):
 
@@ -419,6 +421,7 @@ class DPXFunctions():
             meas_time = meas_time,
             frame_time = frame_time,
             integration = integration,
+            singlevalues = singlevalues,
             use_gui = use_gui
         )
 
@@ -433,79 +436,103 @@ class DPXFunctions():
         meas_time = None,
         frame_time = 1,
         integration = True,
+        singlevalues = False,
         use_gui = False
     ):
 
-        # Activate dosi mode
-        self.dpx.omr = self.set_dosi_mode()
+            # Activate dosi mode
+            self.dpx.omr = self.set_dosi_mode()
 
-        # Data reset
-        self.data_reset()
-        self.clear_bins()
-
-        print('Starting Integration-Measurement!')
-        print('=========================')
-
-        Int_list = np.zeros(256)
-        try:
-            start_time = time.time()
-            frame_last = np.zeros(256)
-            frame_num = 0
-
-            # if make_hist:
-            #    frame_list = np.zeros((256, 8192))
-            # else:
-            #frame_list = []
-            plot_hist = np.zeros(4096)
-            pixel_list = []
-            for pix in range(256):
-                empty_pixel_list = []
-                pixel_list.append(empty_pixel_list)
-            #time_list = []
-
+            # Data reset
             self.data_reset()
-            while True:
-                if meas_time is not None:
-                    if time.time() - start_time > meas_time:
-                        break
+            self.clear_bins()
 
-                # Frame readout
-                frame = np.asarray( self.read_tot() )
-                #time_list.append(time.time() - start_time)
-                frame_filt = np.argwhere(frame - frame_last == 0)
-                frame_last = np.array(frame, copy=True)
-                frame[frame_filt] = 0
+            print('Starting Integration-Measurement!')
+            print('=========================')
 
-                # Wait
-                time.sleep( frame_time )
-
-                if use_gui:
-                    yield frame
-
-                # plot_hist[frame] += 1
-                # Show readout speed
-                if (frame_num > 0) and not (frame_num % 10):
-                    print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
-
+            if singlevalues:
+                Int_list = []
                 for pix in range(256):
-                    if not frame.tolist()[pix] == 0:
-                        Int_list[pix] = Int_list[pix] + frame.tolist()[pix]
+                    empty_pixel_list = []
+                    Int_list.append(empty_pixel_list)
+            else:
+                Int_list = np.zeros(256)
+            try:
+                start_time = time.time()
+                frame_last = np.zeros(256)
+                frame_num = 0
+
+                # if make_hist:
+                #    frame_list = np.zeros((256, 8192))
+                # else:
+                #frame_list = []
+                plot_hist = np.zeros(4096)
+                #pixel_list = []
+                #for pix in range(256):
+                #    empty_pixel_list = []
+                #    pixel_list.append(empty_pixel_list)
+                #time_list = []
+
+                self.data_reset()
+                while True:
+                    if meas_time is not None:
+                        if time.time() - start_time > meas_time:
+                            break
+
+                    # Frame readout
+                    frame = np.asarray( self.read_tot() )
+                    #time_list.append(time.time() - start_time)
+                    frame_filt = np.argwhere(frame - frame_last == 0)
+                    frame_last = np.array(frame, copy=True)
+                    frame[frame_filt] = 0
+
+                    # Wait
+                    time.sleep( frame_time )
+
+                    if use_gui:
+                        yield frame
+
+                    # plot_hist[frame] += 1
+                    # Show readout speed
+                    if (frame_num > 0) and not (frame_num % 10):
+                        print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+
+                    if singlevalues:
+                        for pix in range(256):
+                            if not frame.tolist()[pix] == 0:
+                                Int_list[pix].append(frame.tolist()[pix]) 
+                    else:
+                        for pix in range(256):
+                            if not frame.tolist()[pix] == 0:
+                                Int_list[pix] = Int_list[pix] + frame.tolist()[pix]
+                    
+                    frame_num += 1
                 
-                frame_num += 1
-            
-            if out_fn is not None:
-                yield self.measure_save(
-                    Int_list,
-                    out_fn, start_time
-                )
+                if out_fn is not None:
+                    if singlevalues:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time 
+                        )
+                    else:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
 
 
-        except (KeyboardInterrupt, SystemExit):
-            if out_fn is not None:
-                yield self.measure_save(
-                    Int_list,
-                    out_fn, start_time
-                )
+            except (KeyboardInterrupt, SystemExit):
+                if out_fn is not None:
+                    if singlevalues:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
+                    else:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
 
 
     @classmethod
@@ -513,6 +540,7 @@ class DPXFunctions():
             data,
             out_fn,
             integration = False,
+            singlevalues = False,
             make_hist=False,
             start_time=None
         ):
@@ -520,13 +548,20 @@ class DPXFunctions():
         if make_hist:
             out_dict = {'hist': data}
         elif integration:
-            out_dict = {'integration': data}
+            if singlevalues:
+                out_dict = {'pixel': data}
+            else:
+                out_dict = {'integration': data}
         else:
             out_dict = {'frames': data[0], 'time': data[1]}
         support.json_dump(out_dict, out_fn)
-        if start_time is not None:
-            if make_hist or integration:
+        if start_time is not None and (integration == False or (integration and singlevalues == True)):
+            if make_hist:
                 events = np.count_nonzero(data)
+            elif integration and singlevalues:
+                events = 0
+                for pix in data:
+                    events = events + len(pix)
             else:
                 events = np.count_nonzero(data[0])
             print('Registered %d events in %.2f minutes' %\
@@ -601,7 +636,7 @@ class DPXFunctions():
 
         adc_volt_mean_sort, adc_list_sort = zip(
             *sorted(zip(adc_volt_mean, adc_list)))
-        out_dict = {'Volt': adc_volt_mean, 'ADC': adc_list}
+        out_dict = {'Volt': adc_volt_mean_sort, 'ADC': adc_list}
         if not use_gui:
             if plot:
                 plt.plot(adc_volt_mean_sort, adc_list_sort)
