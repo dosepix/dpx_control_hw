@@ -30,11 +30,11 @@ class DPXFunctions():
 
     def enable_bias(self):
         """Enable bias-voltage"""
-       self.comm.send_cmd('EN_BIAS')
+        self.comm.send_cmd('EN_BIAS')
 
     def disable_bias(self):
         """Disable bias-voltage"""
-       self.comm.send_cmd('DISAB_BIAS')
+        self.comm.send_cmd('DISAB_BIAS')
 
     def led_on(self):
         """Turn flash-LED on"""
@@ -502,7 +502,7 @@ class DPXFunctions():
         use_gui=False
     ):
         # Activate dosi mode
-        self.dpx.omr = self.set_dosi_mode()
+        self.dpx.omr = self.set_integration_mode()
 
         # Data reset
         self.data_reset()
