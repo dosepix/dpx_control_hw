@@ -14,7 +14,7 @@ from . import support
 from . import dpx_support
 
 class DPXFunctions():
-     """Control and measurement functions""" 
+    """Control and measurement functions""" 
     def __init__(self, dpx, comm: communicate.Communicate):
         self.dpx = dpx
         self.comm = comm
@@ -29,11 +29,11 @@ class DPXFunctions():
         self.comm.send_cmd('DISAB_VDD')
 
     def enable_bias(self):
-         """Enable bias-voltage"""
+        """Enable bias-voltage"""
        self.comm.send_cmd('EN_BIAS')
 
     def disable_bias(self):
-         """Disable bias-voltage"""
+        """Disable bias-voltage"""
        self.comm.send_cmd('DISAB_BIAS')
 
     def led_on(self):
