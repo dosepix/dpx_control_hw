@@ -21,7 +21,8 @@ def main():
         frame_time=0,
         save_frames=None,
         out_dir='tot_measurement/',
-        meas_time=1,
+        meas_time=5,
+        make_hist=True,
         use_gui=False
     )
 
