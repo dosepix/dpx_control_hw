@@ -17,7 +17,7 @@ def main():
 
     dpx.dpf.measure_dosi(
         frame_time=1,
-        frames=None,
+        frames=10,
         freq=False,
         out_fn='dose_measurement.json',
         use_gui=False
