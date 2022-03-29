@@ -334,16 +334,6 @@ class DPXFunctions():
                         else:
                             frame_list = []
 
-            if out_dir is not None and out_fn is not None:
-                if make_hist:
-                    data_save = frame_hist
-                else:
-                    data_save = [frame_list, time_list]
-                    self.measure_save(
-                        data_save, out_dir + out_fn,
-                        make_hist, start_time
-                    )
-
         except (KeyboardInterrupt, SystemExit):
             print('Measurement interrupted!')
         finally:
