@@ -457,6 +457,35 @@ class DPXFunctions():
                     out_fn, False, start_time
                 )
 
+    def measure_integration(self,
+        frame_time=1,
+        meas_time=None,
+        out_fn='integration_measurement.json',
+        use_gui=False
+    ):
+        """Wrapper for generator measure_integration_gen"""
+        gen = self.measure_integration_gen(
+            frame_time=frame_time,
+            meas_time=meas_time,
+            out_fn=out_fn,
+            use_gui=use_gui
+        )
+
+        if use_gui:
+            return gen
+
+        # Return last value of generator
+        *_, last = gen
+        return last
+
+    def measure_integration_gen(self,
+        frame_time=1,
+        meas_time=None,
+        out_fn='integration_measurement.json',
+        use_gui=False
+    ):
+        yield None
+
     @classmethod
     def measure_save(cls,
             data,
