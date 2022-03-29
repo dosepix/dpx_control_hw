@@ -415,7 +415,6 @@ class DPXFunctions():
                     out_fn, start_time
                 )
 
-    
     def measure_integration(self,
         out_fn='integration_measurement.json',
         meas_time=None,
@@ -436,7 +435,7 @@ class DPXFunctions():
 
         if use_gui:
             return gen
-        
+        # Return last value of generator
         *_, last = gen
         return last
 
