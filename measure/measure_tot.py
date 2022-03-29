@@ -2,6 +2,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import dpx_control_hw as dch
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 PORT = '/dev/ttyACM0'
@@ -12,7 +14,7 @@ def main():
     params_fn = None
     dpx = dch.Dosepix(
         port_name=PORT,
-        config_fn=config_fn,
+        config_fn='config.conf',
         thl_calib_fn=thl_calib_fn,
         params_fn=params_fn,
         bin_edges_fn=bin_edges
