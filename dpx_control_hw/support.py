@@ -1,11 +1,10 @@
+"""Support functions"""
 import os
 import json
 import numpy as np
 
 def fill_param_dict(param_d):
-    '''
-    Fill missing entries with mean parameters
-    '''
+    """Fill missing entries with mean parameters"""
     # Get mean factors
     mean_dict = {}
     key_list = ['a', 'c', 'b', 't']
@@ -25,80 +24,13 @@ def fill_param_dict(param_d):
 
     return new_param_d
 
-# === Threshold Equalization ===
-def val_to_idx(
-        pixel_dacs,
-        gauss_dict,
-        noise_thl,
-        thl_edges_low=None,
-        thl_edges_high=None,
-        thl_fit_params=None
-    ):
-    # Transform values to indices
-    mean_dict = {}
-    for pixel_dac in pixel_dacs:
-        idxs = np.asarray(
-            [get_volt_from_thl_fit(thl_edges_low, thl_edges_high, thl_fit_params, elm) if elm \
-            else np.nan for elm in gauss_dict[pixel_dac] ], dtype=np.float)
-        mean_dict[pixel_dac] = np.nanmean(idxs)
-
-        for pixel in range(256):
-            elm = noise_thl[pixel_dac][pixel]
-            if elm:
-                noise_thl[pixel_dac][pixel] = get_volt_from_thl_fit(
-                    thl_edges_low, thl_edges_high, thl_fit_params, elm)
-            else:
-                noise_thl[pixel_dac][pixel] = np.nan
-
-    return mean_dict, noise_thl
-
-def get_volt_from_thl_fit(
-        thl_edges_low,
-        thl_edges_high,
-        thl_fit_params,
-        thl
-    ):
-    if (thl_edges_low is None) or (len(thl_edges_low) == 0):
-        return thl
-
-    edges = zip(thl_edges_low, thl_edges_high)
-    for idx, edge in enumerate(edges):
-        if edge[1] > thl >= edge[0]:
-            params = thl_fit_params[idx]
-            if idx == 0:
-                return erf_std_fit(thl, *params)
-            return linear_fit(thl, *params)
-
-def get_noise_level(
-        counts_dict,
-        thl_range,
-        pixel_dacs=['00', '3f'],
-        noise_limt=0
-    ):
-    # Get noise THL for each pixel
-    noise_thl = {key: np.zeros(256) for key in pixel_dacs}
-    gauss_dict = {key: [] for key in pixel_dacs}
-
-    # Loop over each pixel in countsDict
-    for pixel_dac in pixel_dacs:
-        for pixel in range(256):
-            for thl in thl_range:
-                if thl not in counts_dict[pixel_dac].keys():
-                    continue
-
-                if counts_dict[pixel_dac][thl][pixel] > noise_limt:
-                    noise_thl[pixel_dac][pixel] = thl
-                    gauss_dict[pixel_dac].append(thl)
-                    break
-
-    return gauss_dict, noise_thl
-
 # === Periphyery DACs ===
 def split_perihpery_dacs(
         code,
         perc=False,
         show=False
     ):
+    """Transform periphery-dac code to dictionary"""
     if perc:
         perc_eight_bit = float(2**8)
         perc_nine_bit = float(2**9)
@@ -146,6 +78,7 @@ def perihery_dacs_dict_to_code(
         d_periphery,
         perc=False
     ):
+    """Transform dictionary of periphery-dacs to code"""
     if perc:
         perc_eight_bit = float(2**8)
         perc_nine_bit = float(2**9)
@@ -173,6 +106,7 @@ def perihery_dacs_dict_to_code(
 
 # === File functions ===
 def make_directory(directory):
+    """Create a directory. If already existing, attach increasing index"""
     while os.path.isdir(directory):
         dir_front = directory.split('/')[0]
         dir_front_split = dir_front.split('_')
@@ -193,6 +127,7 @@ def json_dump(
         out_fn,
         overwrite=False
     ):
+    """Dump dictionary as json-file"""
     file_ending = '.json'
 
     # Check if file already exists
@@ -224,6 +159,7 @@ def json_dump(
         json.dump(out_dict, out_file, cls=NumpyEncoder)
 
 class NumpyEncoder(json.JSONEncoder):
+    """Used to encode numpy arrays to store them in json-format"""
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)
@@ -235,27 +171,33 @@ class NumpyEncoder(json.JSONEncoder):
 
 # === Conversion functions ===
 def get_thl(p_a, p_b, p_c, p_t):
+    """Get energy threshold corresponding to provided parameters"""
     return 1./(2*p_a) *\
         ( p_t*p_a - p_b + np.sqrt((p_b + p_t*p_a)**2 - 4*p_a*p_c) )
 
 def energy_to_tot(val, p_a, p_b, p_c, p_t):
+    """Transform energy to ToT"""
     return np.where(val >= get_thl(p_a, p_b, p_c, p_t),
         p_a*val + p_b + float(p_c)/(val - p_t), 0)
 
 def tot_to_energy(val, p_a, p_b, p_c, p_t):
+    """Transform ToT to energy"""
     return 1./(2*p_a) *\
         ( p_t*p_a + val - p_b + np.sqrt((p_b + p_t*p_a - val)**2 - 4*p_a*p_c) )
 
 # === Fit functions ===
-def linear_fit(x, m, t):
-    return m * x + t
+def linear_fit(var, p_m, p_t):
+    """Linear function""" 
+    return p_m * var + p_t
 
-def erf_std_fit(x, a, b, c, d):
+def erf_std_fit(var, p_a, p_b, p_c, p_d):
+    """Model the starting part of the THL-calibration curve"""
     from scipy.special import erf
-    return a * (erf((x - b) / c) + 1) + d
+    return p_a * (erf((var - p_b) / p_c) + 1) + p_d
 
 # === ETC ===
 def infinite_for():
+    """Infinite for loop"""
     idx = 0
     while True:
         yield idx
