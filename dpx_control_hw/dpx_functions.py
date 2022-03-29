@@ -160,7 +160,7 @@ class DPXFunctions():
         res = self.comm.get_data(size=512)
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
-        return np.zeros(256)
+        return np.zeros(256).tolist()
 
     def read_dosi(self):
         """Read data in dosi-mode"""
@@ -576,7 +576,7 @@ class DPXFunctions():
 
         adc_volt_mean_sort, adc_list_sort = zip(
             *sorted(zip(adc_volt_mean, adc_list)))
-        out_dict = {'Volt': adc_volt_mean_sort, 'ADC': adc_list}
+        out_dict = {'Volt': adc_volt_mean, 'ADC': adc_list}
         if not use_gui:
             if plot:
                 plt.plot(adc_volt_mean_sort, adc_list_sort)

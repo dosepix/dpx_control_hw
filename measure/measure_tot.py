@@ -1,12 +1,15 @@
 #!/usr/bin/env python
+import matplotlib.pyplot as plt
+import numpy as np
 import dpx_control_hw as dch
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 PORT = '/dev/ttyACM0'
 def main():
     thl_calib_fn = None
-    config_fn = None
+    config_fn = 'config.conf'
     bin_edges = None
     params_fn = None
     dpx = dch.Dosepix(
@@ -17,7 +20,7 @@ def main():
         bin_edges_fn=bin_edges
     )
 
-    tot_frames = dpx.dpf.measure_tot(
+    tot_d = dpx.dpf.measure_tot(
         frame_time=0,
         save_frames=None,
         out_dir='tot_measurement/',
@@ -26,10 +29,8 @@ def main():
         use_gui=False
     )
 
-    # Plot
-    tot = np.asarray(tot_frames).flatten()
-    tot = tot[tot > 0]
-    plt.hist(tot, bins=np.arange(1000))
+    plt.plot(np.sum(tot_d, axis=0))
+    plt.xlim(0, 400)
     plt.show()
 
 if __name__ == '__main__':
