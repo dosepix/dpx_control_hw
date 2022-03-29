@@ -56,23 +56,13 @@ class DPXFunctions():
         self.comm.send_data_binary(data)
 
     def set_pc_mode(self):
-        omr_code = int(self.dpx.omr, 16)
-        omr_code ^= (0b10) << 22
-        omr_code = '%06x' % omr_code
+        omr_code = '%04x' % (
+            (int(self.dpx.omr, 16) & ~((0b11) << 22)) | (0b10 << 22))
         self.write_omr(omr_code)
         return omr_code
 
     def set_dosi_mode(self):
-        omr_code = int(self.dpx.omr, 16)
-        omr_code &= (0b00) << 22
-        omr_code = '%06x' % omr_code
-        self.write_omr(omr_code)
-        return omr_code
-
-    def set_integration_mode(self):
-        omr_code = int(self.dpx.omr, 16)
-        omr_code |= (0b11) << 22
-        omr_code = '%06x' % omr_code
+        omr_code = '%06x' % (int(self.dpx.omr, 16) & ~((0b11) << 22))
         self.write_omr(omr_code)
         return omr_code
 
@@ -418,19 +408,20 @@ class DPXFunctions():
     
     def measure_integration(self,
         out_fn='integration_measurement.json',
-        meas_time=None,
-        frame_time=1,
-        integration=True,
-        single_values=False,
-        use_gui=False
+        meas_time = None,
+        frame_time = 1,
+        integration = True,
+        singlevalues = False,
+        use_gui = False
     ):
+
         """Wrapper for generator measure_Integration_gen"""
         gen = self.measure_integration_gen(
             out_fn = out_fn,
             meas_time = meas_time,
             frame_time = frame_time,
             integration = integration,
-            single_values = single_values,
+            singlevalues = singlevalues,
             use_gui = use_gui
         )
 
@@ -442,109 +433,114 @@ class DPXFunctions():
 
     def measure_integration_gen(self,
         out_fn='integration_measurement.json',
-        meas_time=None,
-        frame_time=1,
-        integration=True,
-        single_values=False,
-        use_gui=False
+        meas_time = None,
+        frame_time = 1,
+        integration = True,
+        singlevalues = False,
+        use_gui = False
     ):
-        # Activate dosi mode
-        self.dpx.omr = self.set_dosi_mode()
 
-        # Data reset
-        self.data_reset()
-        self.clear_bins()
+            # Activate dosi mode
+            self.dpx.omr = self.set_dosi_mode()
 
-        print('Starting Integration-Measurement!')
-        print('=========================')
-
-        if single_values:
-            Int_list = []
-            for pix in range(256):
-                empty_pixel_list = []
-                Int_list.append(empty_pixel_list)
-        else:
-            Int_list = np.zeros(256)
-        try:
-            start_time = time.time()
-            frame_last = np.zeros(256)
-            frame_num = 0
-
-            # if make_hist:
-            #    frame_list = np.zeros((256, 8192))
-            # else:
-            #frame_list = []
-            #pixel_list = []
-            #for pix in range(256):
-            #    empty_pixel_list = []
-            #    pixel_list.append(empty_pixel_list)
-            #time_list = []
-
+            # Data reset
             self.data_reset()
-            while True:
-                if meas_time is not None:
-                    if time.time() - start_time > meas_time:
-                        break
+            self.clear_bins()
 
-                # Frame readout
-                frame = np.asarray( self.read_tot() )
-                #time_list.append(time.time() - start_time)
-                frame_filt = np.argwhere(frame - frame_last == 0)
-                frame_last = np.array(frame, copy=True)
-                frame[frame_filt] = 0
+            print('Starting Integration-Measurement!')
+            print('=========================')
 
-                # Wait
-                time.sleep( frame_time )
+            if singlevalues:
+                Int_list = []
+                for pix in range(256):
+                    empty_pixel_list = []
+                    Int_list.append(empty_pixel_list)
+            else:
+                Int_list = np.zeros(256)
+            try:
+                start_time = time.time()
+                frame_last = np.zeros(256)
+                frame_num = 0
 
-                if use_gui:
-                    yield frame
+                # if make_hist:
+                #    frame_list = np.zeros((256, 8192))
+                # else:
+                #frame_list = []
+                plot_hist = np.zeros(4096)
+                #pixel_list = []
+                #for pix in range(256):
+                #    empty_pixel_list = []
+                #    pixel_list.append(empty_pixel_list)
+                #time_list = []
 
-                # plot_hist[frame] += 1
-                # Show readout speed
-                if (frame_num > 0) and not (frame_num % 10):
-                    print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+                self.data_reset()
+                while True:
+                    if meas_time is not None:
+                        if time.time() - start_time > meas_time:
+                            break
 
-                if single_values:
-                    for pix in range(256):
-                        if not frame.tolist()[pix] == 0:
-                            Int_list[pix].append(frame.tolist()[pix]) 
-                else:
-                    for pix in range(256):
-                        if not frame.tolist()[pix] == 0:
-                            Int_list[pix] = Int_list[pix] + frame.tolist()[pix]
-                frame_num += 1
+                    # Frame readout
+                    frame = np.asarray( self.read_tot() )
+                    #time_list.append(time.time() - start_time)
+                    frame_filt = np.argwhere(frame - frame_last == 0)
+                    frame_last = np.array(frame, copy=True)
+                    frame[frame_filt] = 0
 
-            if out_fn is not None:
-                if single_values:
-                    yield self.measure_save(
-                        Int_list,
-                        out_fn, integration, single_values, False, start_time 
-                    )
-                else:
-                    yield self.measure_save(
-                        Int_list,
-                        out_fn, integration, single_values, False, start_time
-                    )
+                    # Wait
+                    time.sleep( frame_time )
 
-        except (KeyboardInterrupt, SystemExit):
-            if out_fn is not None:
-                if single_values:
-                    yield self.measure_save(
-                        Int_list,
-                        out_fn, integration, single_values, False, start_time
-                    )
-                else:
-                    yield self.measure_save(
-                        Int_list,
-                        out_fn, integration, single_values, False, start_time
-                    )
+                    if use_gui:
+                        yield frame
+
+                    # plot_hist[frame] += 1
+                    # Show readout speed
+                    if (frame_num > 0) and not (frame_num % 10):
+                        print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+
+                    if singlevalues:
+                        for pix in range(256):
+                            if not frame.tolist()[pix] == 0:
+                                Int_list[pix].append(frame.tolist()[pix]) 
+                    else:
+                        for pix in range(256):
+                            if not frame.tolist()[pix] == 0:
+                                Int_list[pix] = Int_list[pix] + frame.tolist()[pix]
+                    
+                    frame_num += 1
+                
+                if out_fn is not None:
+                    if singlevalues:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time 
+                        )
+                    else:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
+
+
+            except (KeyboardInterrupt, SystemExit):
+                if out_fn is not None:
+                    if singlevalues:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
+                    else:
+                        yield self.measure_save(
+                            Int_list,
+                            out_fn, integration, singlevalues, False, start_time
+                        )
+
 
     @classmethod
     def measure_save(cls,
             data,
             out_fn,
-            integration=False,
-            single_values=False,
+            integration = False,
+            singlevalues = False,
             make_hist=False,
             start_time=None
         ):
@@ -552,17 +548,17 @@ class DPXFunctions():
         if make_hist:
             out_dict = {'hist': data}
         elif integration:
-            if single_values:
+            if singlevalues:
                 out_dict = {'pixel': data}
             else:
                 out_dict = {'integration': data}
         else:
             out_dict = {'frames': data[0], 'time': data[1]}
         support.json_dump(out_dict, out_fn)
-        if start_time is not None and (integration == False or (integration and single_values == True)):
+        if start_time is not None and (integration == False or (integration and singlevalues == True)):
             if make_hist:
                 events = np.count_nonzero(data)
-            elif integration and single_values:
+            elif integration and singlevalues:
                 events = 0
                 for pix in data:
                     events = events + len(pix)
