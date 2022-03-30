@@ -52,6 +52,7 @@ class Dosepix():
         self.ser = None
         self.comm = None
         self.dpf = None
+        self.dpm = None
         self.equal = None
         self.support = support
 
@@ -147,7 +148,12 @@ class Dosepix():
     def init_dpx(self):
         self.connect()
         self.comm = communicate.Communicate(self.ser, debug=False)
+
+        # Functions to control the Dosepix detector
         self.dpf = dpx_functions.DPXFunctions(self, self.comm)
+        # Functions to perform measurements with DPX
+        self.dpm = dpx_functions.DPXFunctions(self, self.comm)
+        # Functions to equalize DPX
         self.equal = equalization.Equalization(self, self.comm)
 
         # Enable voltages

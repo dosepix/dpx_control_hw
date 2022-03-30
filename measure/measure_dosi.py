@@ -15,7 +15,7 @@ def main():
         bin_edges_fn=bin_edges
     )
 
-    dpx.dpf.measure_dosi(
+    dpx.dpm.measure_dosi(
         frame_time=1,
         frames=10,
         freq=False,

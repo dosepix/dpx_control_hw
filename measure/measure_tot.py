@@ -20,7 +20,7 @@ def main():
         bin_edges_fn=bin_edges
     )
 
-    tot_d = dpx.dpf.measure_tot(
+    tot_d = dpx.dpm.measure_tot(
         frame_time=0,
         save_frames=None,
         out_dir='tot_measurement/',
