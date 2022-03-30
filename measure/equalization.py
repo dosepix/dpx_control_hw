@@ -15,7 +15,17 @@ def main():
     )
 
     config_fn = 'config.conf'
-    dpx.equalization(config_fn=config_fn)
+
+    # periphery_d = dpx.support.split_perihpery_dacs(dpx.periphery_dacs)
+    # periphery_d['i_pixeldac'] = 50
+    # dpx.periphery_dacs = dpx.support.perihery_dacs_dict_to_code(periphery_d)
+
+    # thl_calib_d = dpx.dpf.measure_thl(out_fn=None, plot=False)
+    # dpx.set_thl_calib(thl_calib_d)
+    dpx.equalization(
+        config_fn=config_fn,
+        thl_offset=30
+    )
 
 if __name__ == '__main__':
     main()
