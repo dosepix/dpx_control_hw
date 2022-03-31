@@ -144,6 +144,12 @@ class DPXFunctionsDummy():
         data[data < 0] = 0
         return data.tolist()
 
+    def read_integration(self):
+        """Read data in integration-mode"""
+        data = np.random.normal(100, 10, 256)
+        data[data < 0] = 0
+        return data.tolist()
+
     # === CLEAR BINS ===
     def clear_bins(self):
         """Clear bins of dosi-mode"""
