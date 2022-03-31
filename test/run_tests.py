@@ -79,8 +79,7 @@ class TestMeasurementFunctions(TestCaseBase):
             self.dpx.dpm.measure_integration(
                 meas_time=1,
                 frame_time=0.1,
-                integration=True,
-                single_values=False,
+                out_fn=self.output_dir + 'integration_measurement.json',
                 use_gui=False
             )
             print()
