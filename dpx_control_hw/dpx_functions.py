@@ -164,13 +164,23 @@ class DPXFunctions():
         res = self.comm.get_data(size=512)
         if res:
             return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
-        return np.zeros(256).tolist()
+        return np.zeros(256, dtype=int).tolist()
 
     def read_dosi(self):
         """Read data in dosi-mode"""
         self.comm.send_cmd('READ_DOSI', write=False)
         res = self.comm.get_data(size=512)
-        return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
+        if res:
+            return [int.from_bytes(res[i:i+2], 'big') for i in range(0, len(res), 2)]
+        return np.zeros(256, dtype=int).tolist()
+
+    def read_integration(self):
+        """Read data in integration-mode"""
+        self.comm.send_cmd('READ_INT', write=False)
+        res = self.comm.get_data(size=768)
+        if res:
+            return [int.from_bytes(res[i:i+3], 'big') for i in range(0, len(res), 3)]
+        return np.zeros(256, dtype=int).tolist()
 
     # === CLEAR BINS ===
     def clear_bins(self):

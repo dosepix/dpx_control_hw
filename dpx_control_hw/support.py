@@ -108,16 +108,26 @@ def perihery_dacs_dict_to_code(
 def make_directory(directory):
     """Create a directory. If already existing, attach increasing index"""
     while os.path.isdir(directory):
-        dir_front = directory.split('/')[0]
-        dir_front_split = dir_front.split('_')
-        if len(dir_front_split) >= 2:
-            if dir_front_split[-1].isdigit():
-                dir_num = int(dir_front_split[-1]) + 1
-                directory = '_'.join(dir_front_split[:-1]) + '_' + str(dir_num) + '/'
-            else:
-                directory = dir_front + '_1/'
+        if directory.endswith('/'):
+            directory = directory[:-1]
+        dir_split = directory.split('/')
+
+        # Get prepending path
+        if len(dir_split) >= 2:
+            dir_front = '/'.join(dir_split[:-1]) + '/'
         else:
-            directory = dir_front + '_1/'
+            dir_front = ''
+
+        dir_back = dir_split[-1]
+        dir_back_split = dir_back.split('_')
+        if len(dir_back_split) >= 2:
+            if dir_back_split[-1].isdigit():
+                dir_num = int(dir_back_split[-1]) + 1
+                directory = dir_front + '_'.join(dir_back_split[:-1]) + '_' + str(dir_num) + '/'
+            else:
+                directory = dir_front + dir_back + '_1/'
+        else:
+            directory = dir_front + dir_back + '_1/'
 
     os.makedirs(directory)
     return directory

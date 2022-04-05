@@ -135,11 +135,19 @@ class DPXFunctionsDummy():
     def read_tot(self):
         """Read data in ToT-mode"""
         data = np.random.normal(100, 10, 256)
+        data = np.asarray(data, dtype=int)
         data[data < 0] = 0
         return data.tolist()
 
     def read_dosi(self):
         """Read data in dosi-mode"""
+        data = np.random.normal(100, 10, 256)
+        data = np.asarray(data, dtype=int)
+        data[data < 0] = 0
+        return data.tolist()
+
+    def read_integration(self):
+        """Read data in integration-mode"""
         data = np.random.normal(100, 10, 256)
         data[data < 0] = 0
         return data.tolist()

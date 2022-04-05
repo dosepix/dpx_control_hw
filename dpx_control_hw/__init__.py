@@ -1,3 +1,4 @@
+import json
 import serial
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,6 +8,8 @@ from . import config
 from . import support
 from . import communicate
 from . import dpx_functions
+from . import dpx_functions_dummy
+from . import dpx_measurement
 from . import equalization
 
 class Dosepix():
@@ -150,13 +153,19 @@ class Dosepix():
         print(self.thl_edges_low, self.thl_edges_high)
 
     def init_dpx(self):
-        self.connect()
+        if self.port_name is not None:
+            self.connect()
+
         self.comm = communicate.Communicate(self.ser, debug=False)
 
         # Functions to control the Dosepix detector
-        self.dpf = dpx_functions.DPXFunctions(self, self.comm)
+        # If port_name is None, the dummy generator is used
+        if self.port_name is None:
+            self.dpf = dpx_functions_dummy.DPXFunctionsDummy(self, self.comm)
+        else:
+            self.dpf = dpx_functions.DPXFunctions(self, self.comm)
         # Functions to perform measurements with DPX
-        self.dpm = dpx_functions.DPXFunctions(self, self.comm)
+        self.dpm = dpx_measurement.DPXMeasurement(self, self.dpf)
         # Functions to equalize DPX
         self.equal = equalization.Equalization(self, self.comm)
 
