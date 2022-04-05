@@ -1,5 +1,4 @@
 import json
-
 import serial
 import numpy as np
 import matplotlib.pyplot as plt
@@ -95,15 +94,21 @@ class Dosepix():
     def equalization(self, config_fn,
         thl_step=1,
         noise_limit=10,
-        n_evals=1,
-        thl_offset=0
+        n_evals=3,
+        num_dacs=20,
+        i_pixeldac=60,
+        thl_offset=0,
+        plot=True
     ):
         *_, last = self.equal.threshold_equalization(
             thl_step=thl_step,
             noise_limit=noise_limit,
             n_evals=n_evals,
+            num_dacs=num_dacs,
+            i_pixeldac=i_pixeldac,
             thl_offset=thl_offset,
-            use_gui=False
+            use_gui=False,
+            plot=plot
         )
         pixel_dacs, thl_new, conf_mask = last
         periphery_dacs = self.periphery_dacs[:-4] + thl_new
@@ -145,6 +150,7 @@ class Dosepix():
         self.thl_edges_high = thl_high
         self.thl_fit_params = thl_fit_params
         self.thl_edges = thl_edges
+        print(self.thl_edges_low, self.thl_edges_high)
 
     def init_dpx(self):
         if self.port_name is not None:
