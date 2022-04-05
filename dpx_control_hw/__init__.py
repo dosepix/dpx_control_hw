@@ -150,7 +150,6 @@ class Dosepix():
         self.thl_edges_high = thl_high
         self.thl_fit_params = thl_fit_params
         self.thl_edges = thl_edges
-        print(self.thl_edges_low, self.thl_edges_high)
 
     def init_dpx(self):
         if self.port_name is not None:

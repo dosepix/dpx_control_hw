@@ -15,7 +15,8 @@ def main():
     )
 
     config_fn = 'config.conf'
-    thl_calib_d = dpx.dpf.measure_thl(out_fn=None, plot=False)
+    thl_calib_d = dpx.dpm.measure_thl(
+        out_fn=None, plot=False)
     dpx.set_thl_calib(thl_calib_d)
 
     dpx.equalization(
@@ -24,7 +25,7 @@ def main():
         noise_limit=10,
         n_evals=3,
         num_dacs=2,
-        i_pixeldac=50,
+        i_pixeldac=60,
         thl_offset=30,
         plot=True
     )

@@ -14,7 +14,7 @@ class DPXFunctions():
 
     # === HARDWARE ===
     def enable_vdd(self):
-        """Enable VDD""" 
+        """Enable VDD"""
         self.comm.send_cmd('EN_VDD')
 
     def disable_vdd(self):

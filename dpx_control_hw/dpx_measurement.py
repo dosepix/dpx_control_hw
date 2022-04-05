@@ -522,12 +522,10 @@ class DPXMeasurement:
             plt.errorbar(adc_list, adc_volt_mean, yerr=adc_volt_err, marker='x')
             plt.show()
 
-        adc_volt_mean_sort, adc_list_sort = zip(
-            *sorted(zip(adc_volt_mean, adc_list)))
-        out_dict = {'Volt': adc_volt_mean_sort, 'ADC': adc_list}
+        out_dict = {'Volt': adc_volt_mean, 'ADC': adc_list}
         if not use_gui:
             if plot:
-                plt.plot(adc_volt_mean_sort, adc_list_sort)
+                plt.plot(adc_volt_mean, adc_list)
                 plt.show()
 
             print(
