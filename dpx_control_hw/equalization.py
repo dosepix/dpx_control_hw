@@ -80,48 +80,67 @@ class Equalization(dpx_functions.DPXFunctions):
             plt.xlabel('THL')
             plt.show()
 
-        pixel_dacs = np.asarray([int(pixel_dac_setting[0], 16)] * 256)
-        noisy_pixels = np.asarray([True] * 256)
-        n_noisy_pixels = 256
+        # Adjust thl and pixel-dacs
+        pixel_dacs_states_d = {}
+        pixel_dacs_medians_d = {}
+        noisy_pixels_d = {}
 
-        loop_cnt = 0
+        print('Loop over THL offsets')
+        for thl_off in tqdm( range(0, 10+1, 1) ):
+            # Set offset
+            self.write_periphery(self.dpx.periphery_dacs[:-4] + '%04x' % (thl_mean - thl_off))
 
-        pixel_dacs_states = []
-        while n_noisy_pixels > 0 and loop_cnt < 100:
-            # np.random.shuffle( pixel_dacs )
-            pixel_dac_str = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
-            self.dpx.dpf.write_pixel_dacs(pixel_dac_str)
-            self.data_reset()
-            pc_data = np.asarray(self.read_pc())
+            pixel_dacs = np.asarray([int(pixel_dac_setting[0], 16)] * 256)
+            noisy_pixels = np.asarray([True] * 256)
+            n_noisy_pixels = 256
 
-            # Number of noisy pixels
-            n_noisy_pixels = len(noisy_pixels[noisy_pixels])
-            pc_noisy = pc_data > 0
+            loop_cnt = 0
 
-            # Increase pixel-dac of noisy pixels
-            pixel_dacs[pc_noisy] -= 1
+            pixel_dacs_states = []
+            while n_noisy_pixels > 0 and loop_cnt < 100:
+                # np.random.shuffle( pixel_dacs )
+                pixel_dac_str = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
+                self.dpx.dpf.write_pixel_dacs(pixel_dac_str)
+                self.data_reset()
+                pc_data = np.asarray(self.read_pc())
 
-            # Decrease pixel-dac of non-noisy pixels
-            pixel_dacs[~pc_noisy] += 1
+                # Number of noisy pixels
+                n_noisy_pixels = len(noisy_pixels[noisy_pixels])
+                pc_noisy = pc_data > 0
 
-            # Ensure min and max values
-            pixel_dacs[pixel_dacs < 0] = 0
-            pixel_dacs[pixel_dacs > 63] = 63
+                # Increase pixel-dac of noisy pixels
+                pixel_dacs[pc_noisy] -= 1
 
-            pixel_dacs_states.append( pixel_dacs.tolist() )
+                # Decrease pixel-dac of non-noisy pixels
+                pixel_dacs[~pc_noisy] += 1
 
-            loop_cnt += 1
+                # Ensure min and max values
+                pixel_dacs[pixel_dacs < 0] = 0
+                pixel_dacs[pixel_dacs > 63] = 63
 
-        # Calculate median of 20 last pixel-dac values per pixel
-        pixel_dacs_states = np.asarray(pixel_dacs_states).T
-        pixel_dacs_medians = np.median(pixel_dacs_states[:,-20:], axis=1)
+                pixel_dacs_states.append( pixel_dacs.tolist() )
 
-        # Reduce thl to ensure robustness
-        thl_mean -= 20
+                loop_cnt += 1
+
+            # Calculate median of 20 last pixel-dac values per pixel
+            pixel_dacs_states = np.asarray(pixel_dacs_states).T
+            pixel_dacs_medians = np.median(pixel_dacs_states[:,-20:], axis=1)
+
+            pixel_dacs_states_d[thl_off] = pixel_dacs_states
+            pixel_dacs_medians_d[thl_off] = pixel_dacs_medians
+            noisy_pixels = (pixel_dacs_medians >= 63) | (pixel_dacs_medians <= 0)
+            noisy_pixels_d[thl_off] = len(noisy_pixels[noisy_pixels])
+
+        key_min = min(noisy_pixels_d, key=noisy_pixels_d.get)
+        pixel_dacs_states = pixel_dacs_states_d[key_min]
+        pixel_dacs_medians = np.asarray(pixel_dacs_medians_d[key_min], dtype=int)
+
+        # Reduce thl further to ensure robustness
+        thl_mean = thl_mean - key_min - 10
 
         if not use_gui and plot:
             print('-- Evolution of pixel-dacs for first 16 pixels --')
-            for pixel in range(16):
+            for pixel in range(256):
                 color = 'C%d' % pixel
                 plt.step(
                     np.arange(pixel_dacs_states.shape[1]),
@@ -143,7 +162,7 @@ class Equalization(dpx_functions.DPXFunctions):
         conf_mask = ''.join(conf_mask)
 
         # Convert to code string
-        pixel_dacs = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs])
+        pixel_dacs = ''.join(['%02x' % pixel_dac for pixel_dac in pixel_dacs_medians])
 
         print('Bad pixels:', len(noisy_pixels[noisy_pixels]))
         print('THL:', thl_mean) # '%04x' % int(thl_new))
