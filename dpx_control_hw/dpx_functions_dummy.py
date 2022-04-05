@@ -41,7 +41,7 @@ class DPXFunctionsDummy():
 
     def read_adc(self):
         """Read DPX-ADC"""
-        return np.random.randint(0, 255)
+        return '%02x' % np.random.randint(0, 255)
 
     # === RESET ===
     def global_reset(self):

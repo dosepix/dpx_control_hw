@@ -87,7 +87,22 @@ class TestMeasurementFunctions(TestCaseBase):
 
         self.assertIsFile(self.output_dir + 'integration_measurement.json')
         self.assertIsFile(self.output_dir + 'integration_measurement_1.json')
-        self.assertIsFile(self.output_dir + 'integration_measurement_1.json')
+        self.assertIsFile(self.output_dir + 'integration_measurement_2.json')
+
+    def test_read_adc(self):
+        print('=== Testing ADC-reading ===')
+        self.dpx.dpm.measure_adc(
+            analog_out='v_tha',
+            perc=False,
+            adc_high=8191,
+            adc_low=0,
+            adc_step=1,
+            n_meas=1,
+            out_fn=self.output_dir + 'adc_measurement.json',
+            plot=True,
+            use_gui=False
+        )
+        self.assertIsFile(self.output_dir + 'adc_measurement.json')
 
 if __name__ == '__main__':
     unittest.main()
