@@ -75,7 +75,7 @@ class DPXFunctions():
     def set_dosi_mode(self):
         """Set dosi mode"""
         omr_code = int(self.dpx.omr, 16)
-        omr_code &= (0b00) << 22
+        omr_code ^= (0b00) << 22
         omr_code = '%06x' % omr_code
         self.write_omr(omr_code)
         return omr_code

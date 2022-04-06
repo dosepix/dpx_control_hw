@@ -121,6 +121,7 @@ class DPXMeasurement:
 
         print('Starting ToT Measurement!')
         print('=========================')
+        print_time = start_time
         try:
             self.dpf.data_reset()
             while True:
@@ -143,8 +144,9 @@ class DPXMeasurement:
                     yield frame
 
                 # Show readout speed
-                if (frame_num > 0) and not (frame_num % 10):
+                if not use_gui and time.time() - print_time > 1:
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+                    print_time = time.time()
 
                 if make_hist:
                     px_idx = np.dstack([np.arange(256), frame])[0]
@@ -183,7 +185,7 @@ class DPXMeasurement:
                     self.measure_save(
                         data_save, out_dir + out_fn, start_time
                     )
-                yield data_save
+                yield frame_list
             else:
                 yield {'Slot1': frame_list}
 
