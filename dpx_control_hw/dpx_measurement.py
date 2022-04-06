@@ -285,11 +285,14 @@ class DPXMeasurement:
         except (KeyboardInterrupt, SystemExit):
             print('Measurement interrupted!')
         finally:
+            out_dict = {'frames': frame_list, 'times': time_list}
             if out_fn is not None:
                 yield self.measure_save(
-                    {'frames': frame_list, 'times': time_list},
+                    out_dict,
                     out_fn, start_time
                 )
+            else:
+                yield out_dict
 
     def measure_integration(self,
         out_fn='integration_measurement.json',
@@ -347,6 +350,7 @@ class DPXMeasurement:
         # Init containers
         frame_list, time_list = [], []
         start_time = time.time()
+        print_time = start_time
         frame_num = 0
 
         print('Starting Integration-Measurement!')
@@ -361,6 +365,7 @@ class DPXMeasurement:
 
                 # Frame readout
                 frame = np.asarray( self.dpf.read_integration() )
+                frame_list.append( frame )
 
                 # Wait
                 time.sleep( frame_time )
@@ -369,8 +374,9 @@ class DPXMeasurement:
                     yield frame
 
                 # Show readout speed
-                if (frame_num > 0) and not (frame_num % 10):
+                if not use_gui and time.time() - print_time > 1:
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+                    print_time = time.time()
 
                 frame_num += 1
         except (KeyboardInterrupt, SystemExit):

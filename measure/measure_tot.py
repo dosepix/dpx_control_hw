@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+""" Perform ToT-measurements. See documentation of
+dpm.measure_tot for more information"""
 import numpy as np
 import matplotlib.pyplot as plt
 import dpx_control_hw as dch
