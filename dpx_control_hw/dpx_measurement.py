@@ -140,9 +140,6 @@ class DPXMeasurement:
                 # Wait
                 time.sleep( frame_time )
 
-                if use_gui:
-                    yield frame
-
                 # Show readout speed
                 if not use_gui and time.time() - print_time > 1:
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
@@ -156,6 +153,9 @@ class DPXMeasurement:
                     frame_list[px_idx[:,0], px_idx[:,1]] += 1
                 else:
                     frame_list.append( frame.tolist() )
+
+                if use_gui:
+                    yield frame_list
                 frame_num += 1
 
                 if (save_frames is not None) and (frame_num <= save_frames):
