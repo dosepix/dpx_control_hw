@@ -1,5 +1,6 @@
 import json
 import serial
+from serial.tools import list_ports
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,6 +12,10 @@ from . import dpx_functions
 from . import dpx_functions_dummy
 from . import dpx_measurement
 from . import equalization
+
+# Constants
+HWID = '206E396'    # Hardware id
+VID = '0483:5740'   # Vendor id
 
 class Dosepix():
     def __init__(self,
@@ -208,3 +213,23 @@ class Dosepix():
 
     def __del__(self):
         self.close()
+
+def find_port():
+    """Find port with correct hwid to establish connection"""
+    for port in list_ports.comports():
+        chars = port.hwid.split(' ')
+
+        # USB device check
+        if chars[0] != 'USB':
+            continue
+
+        # Vendor check
+        vendor = chars[1][8:]
+        if vendor != VID:
+            continue
+
+        # Serial number of device
+        serial_num = chars[2][4:11]
+        if serial_num == HWID:
+            return port.device
+    return None

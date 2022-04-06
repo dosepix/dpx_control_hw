@@ -1,10 +1,7 @@
 #!/usr/bin/env python
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 import dpx_control_hw as dch
-import numpy as np
-import matplotlib.pyplot as plt
-
 
 PORT = '/dev/ttyACM0'
 def main():
