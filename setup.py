@@ -32,5 +32,7 @@ setuptools.setup(name='dpx_control_hw',
         'matplotlib',
         'tqdm',
         'pyserial',
+        'jupyterlab',
+        'jupyter-dash',
     ]
 )
