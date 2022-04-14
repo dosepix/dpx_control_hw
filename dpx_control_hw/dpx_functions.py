@@ -7,7 +7,7 @@ import numpy as np
 from . import communicate
 
 class DPXFunctions():
-    """Control and measurement functions""" 
+    """Control and measurement functions"""
     def __init__(self, dpx, comm: communicate.Communicate):
         self.dpx = dpx
         self.comm = comm
