@@ -43,6 +43,11 @@ class DPXFunctions():
         res = self.comm.get_data(size=2)
         return ''.join( ['%02x' % int(r) for r in res[::-1]] )
 
+    def read_bias(self):
+        self.comm.send_cmd('READ_BIAS', write=False)
+        res = self.comm.get_data(size=2)
+        return ''.join( ['%02x' % int(r) for r in res[::-1]] )
+
     # === RESET ===
     def global_reset(self):
         """Global reset"""
