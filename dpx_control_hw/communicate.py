@@ -42,7 +42,10 @@ class Communicate():
     def get_response(self):
         res = self.ser.read_until()
         # Remove newline
-        return res[:-1].decode()
+        try:
+            return res[:-1].decode()
+        except UnicodeDecodeError:
+            return 'DECODE_ERROR'
 
     def get_data(self, size=None):
         if size is None:
