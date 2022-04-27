@@ -24,57 +24,66 @@ def main():
         bin_edges_fn=bin_edges
     )
 
-    scan_dac_range(dpx)
+    # while True:
+    # scan_dac_range(dpx, repeats=10, column=7)
+    show_tot_dist(dpx, dac=100, duration=10, column=0)
 
-    print(dpx.pixel_dacs)
-    print(dpx.dpf.read_pixel_dacs())
-
-    # Start test pulses
-    dpx.dtp.start(columns=[3])
-    print(dpx.dpf.read_conf_bits())
-
+def show_tot_dist(dpx,
+        dac=100,
+        duration=10,
+        column=0
+    ):
+    dpx.dtp.start(columns=[column])
     dpx.dpf.set_dosi_mode()
-    dpx.dtp.set_test_pulse_voltage(300)
+    dpx.dtp.set_test_pulse_voltage(dac)
 
     dpx.dpf.data_reset()
     tot_frames = []
-
     start_time = time.time()
-    for _ in range(1000):
+    while (time.time() - start_time) < abs(duration):
         dpx.dpf.data_reset()
         dpx.dpf.generate_test_pulse()
 
-        tot = dpx.dpf.read_tot()[0:16]
+        tot = dpx.dpf.read_tot()[column*16:(column+1)*16]
         tot_frames.append( tot )
     tot_frames = np.asarray( tot_frames ).T
 
+    _, ax = plt.subplots(16, 1,
+        figsize=(5, 50),
+        sharex=True)
     for pixel in range(16):
-        print(np.mean(tot_frames[pixel]), np.std(tot_frames[pixel]))
-        plt.hist(tot_frames[pixel], bins=30)
-        plt.show()
-    print(tot)
+        median, std = np.median(tot_frames[pixel]), np.std(tot_frames[pixel])
+        print(pixel, median, std)
+        hist, bins = np.histogram(tot_frames[pixel], bins=30)
+        ax[pixel].step(bins[:-1], hist, label=pixel)
+        ax[pixel].axvline(x=median, ls='--', color='k')
+    plt.xlabel('ToT (10 ns)')
+    plt.show()
 
-
-def scan_dac_range(dpx, column=0):
+def scan_dac_range(dpx, repeats=1, column=0):
     dpx.dtp.start(columns=[column])
     dpx.dpf.set_dosi_mode()
 
     dac_range = np.arange(0, 512)
     tot_frames = []
     for voltage in tqdm(dac_range):
-        dpx.dtp.set_test_pulse_voltage(voltage)
-        dpx.dpf.data_reset()
-        dpx.dpf.generate_test_pulse()
-        tot = dpx.dpf.read_tot()[column * 16:(column + 1) * 16]
-        tot_frames.append( tot )
+        tot_repeats = []
+        for _ in range(repeats):
+            dpx.dtp.set_test_pulse_voltage(voltage)
+            dpx.dpf.data_reset()
+            dpx.dpf.generate_test_pulse()
+            tot = dpx.dpf.read_tot()[column * 16:(column + 1) * 16]
+            tot_repeats.append( tot )
+        tot_repeats = np.asarray( tot_repeats )
+        tot_frames.append( np.median(tot_repeats, axis=0) )
     tot_frames = np.asarray( tot_frames ).T
 
     for pixel in range(16):
         plt.plot(dac_range, tot_frames[pixel], label=pixel)
 
+    plt.legend()
     plt.xlabel('DAC')
     plt.ylabel('ToT (10 ns)')
-    plt.legend()
     plt.show()
 
 if __name__ == '__main__':
