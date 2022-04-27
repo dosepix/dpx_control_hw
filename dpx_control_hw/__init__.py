@@ -11,6 +11,7 @@ from . import communicate
 from . import dpx_functions
 from . import dpx_functions_dummy
 from . import dpx_measurement
+from . import dpx_testpulse
 from . import equalization
 
 # Constants
@@ -58,6 +59,7 @@ class Dosepix():
         self.comm = None
         self.dpf = None
         self.dpm = None
+        self.dtp = None
         self.equal = None
         self.support = support
 
@@ -172,6 +174,8 @@ class Dosepix():
         self.dpm = dpx_measurement.DPXMeasurement(self, self.dpf)
         # Functions to equalize DPX
         self.equal = equalization.Equalization(self, self.comm)
+        # Test pulse functions
+        self.dtp = dpx_testpulse.DPXTestpulse(self, self.dpf)
 
         # Enable voltages
         self.dpf.enable_vdd()

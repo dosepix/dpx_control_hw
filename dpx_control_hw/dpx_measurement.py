@@ -433,7 +433,7 @@ class DPXMeasurement:
         """Set OMR code according to selected analog_out"""
         omr_code = int(self.dpx.omr, 16)
         omr_code &= ~(0b11111 << 12)
-        omr_code |= getattr(dpx_support.omr_analog_out_sel, analog_out)
+        omr_code |= getattr(dpx_support._omr_analog_out_sel, analog_out)
         self.dpx.omr = '%06x' % omr_code
         print('OMR set to:', self.dpx.omr)
         self.dpf.write_omr(self.dpx.omr)
