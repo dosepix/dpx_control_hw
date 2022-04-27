@@ -140,9 +140,6 @@ class DPXMeasurement:
                 # Wait
                 time.sleep( frame_time )
 
-                if use_gui:
-                    yield frame
-
                 # Show readout speed
                 if not use_gui and time.time() - print_time > 1:
                     print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
@@ -156,6 +153,9 @@ class DPXMeasurement:
                     frame_list[px_idx[:,0], px_idx[:,1]] += 1
                 else:
                     frame_list.append( frame.tolist() )
+
+                if use_gui:
+                    yield frame_list
                 frame_num += 1
 
                 if (save_frames is not None) and (frame_num <= save_frames):
@@ -426,6 +426,18 @@ class DPXMeasurement:
         *_, last = gen
         return last
 
+    def select_adc(
+        self,
+        analog_out='v_tha'
+    ):
+        """Set OMR code according to selected analog_out"""
+        omr_code = int(self.dpx.omr, 16)
+        omr_code &= ~(0b11111 << 12)
+        omr_code |= getattr(dpx_support.omr_analog_out_sel, analog_out)
+        self.dpx.omr = '%06x' % omr_code
+        print('OMR set to:', self.dpx.omr)
+        self.dpf.write_omr(self.dpx.omr)
+
     def measure_adc_gen(
             self,
             analog_out='v_tha',
@@ -479,12 +491,7 @@ class DPXMeasurement:
         start_time = time.time()
 
         # Select analog out
-        omr_code = int(self.dpx.omr, 16)
-        omr_code &= ~(0b11111 << 12)
-        omr_code |= getattr(dpx_support.omr_analog_out_sel, analog_out)
-        self.dpx.omr = '%06x' % omr_code
-        print('OMR set to:', self.dpx.omr)
-        self.dpf.write_omr(self.dpx.omr)
+        self.select_adc(analog_out=analog_out)
 
         # Get peripherys
         d_peripherys = support.split_perihpery_dacs(
@@ -530,7 +537,7 @@ class DPXMeasurement:
             plt.errorbar(adc_list, adc_volt_mean, yerr=adc_volt_err, marker='x')
             plt.show()
 
-        out_dict = {'Volt': adc_volt_mean, 'ADC': adc_list}
+        out_dict = {'Volt': adc_volt_mean, 'ADC': adc_list.tolist()}
         if not use_gui:
             if plot:
                 plt.plot(adc_volt_mean, adc_list)

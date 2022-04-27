@@ -7,7 +7,7 @@ import numpy as np
 from . import communicate
 
 class DPXFunctions():
-    """Control and measurement functions""" 
+    """Control and measurement functions"""
     def __init__(self, dpx, comm: communicate.Communicate):
         self.dpx = dpx
         self.comm = comm
@@ -40,6 +40,11 @@ class DPXFunctions():
     def read_adc(self):
         """Read DPX-ADC"""
         self.comm.send_cmd('READ_ADC', write=False)
+        res = self.comm.get_data(size=2)
+        return ''.join( ['%02x' % int(r) for r in res[::-1]] )
+
+    def read_bias(self):
+        self.comm.send_cmd('READ_BIAS', write=False)
         res = self.comm.get_data(size=2)
         return ''.join( ['%02x' % int(r) for r in res[::-1]] )
 
