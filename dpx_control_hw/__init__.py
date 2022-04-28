@@ -31,7 +31,6 @@ class Dosepix():
 
         self.use_gui = use_gui
         self.params_dict = None
-        self.bin_edges = None
         self.single_thresholds = None
 
         # Detector settings, standard values
@@ -77,7 +76,6 @@ class Dosepix():
             self.omr = conf_d['omr']
             self.conf_bits = conf_d['conf_bits']
             self.pixel_dacs = conf_d['pixel_dacs']
-            self.bin_edges = conf_d['bin_edges']
 
         # Load thl calibration
         if thl_calib_fn is not None:

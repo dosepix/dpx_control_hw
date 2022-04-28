@@ -14,19 +14,67 @@ def main():
         port = '/dev/ttyACM0'
 
     thl_calib_fn = None
-    bin_edges = None
+    BIN_EDGES = np.asarray(np.linspace(5, 800, 16), dtype=int).tolist()
     params_fn = None
     dpx = dch.Dosepix(
         port_name=port,
         config_fn=CONFIG,
         thl_calib_fn=thl_calib_fn,
         params_fn=params_fn,
-        bin_edges_fn=bin_edges
+        bin_edges_fn=BIN_EDGES
     )
 
-    # while True:
     # scan_dac_range(dpx, repeats=10, column=7)
-    show_tot_dist(dpx, dac=100, duration=10, column=0)
+    # show_tot_dist(dpx, dac=100, duration=10 * 60 * 60, column=0)
+    show_dosi_dist(dpx, BIN_EDGES)
+
+def show_dosi_dist(dpx, bin_edges):
+    fig, ax = plt.subplots(4, 4,
+        figsize=(10, 10),
+        sharex=True,
+        sharey=True)
+    ax = ax.flatten()
+
+    for column in range(16):
+        dpx.dpf.set_dosi_mode()
+        dpx.dpf.clear_bins()
+        dpx.dtp.start(columns=[column])
+
+        dac = int((16 - column) / 16 * 460)
+        print('DAC = %d' % dac)
+        dpx.dtp.set_test_pulse_voltage(dac)
+        for _ in range(100 * (column + 1)):
+            dpx.dpf.generate_test_pulse()
+
+        dpx.dpf.write_column_select(15 - column)
+        col_read = dpx.dpf.read_column_select()
+        dosi = np.asarray( dpx.dpf.read_dosi() ).reshape((16, 16))
+        dosi = np.flip(dosi, axis=1)
+        print('ToT')
+        tot = dpx.dpf.read_tot()[column*16:(column+1)*16]
+        print(tot)
+        ax[column].set_title(col_read)
+        ax[column].imshow(
+            dosi,
+            extent=[bin_edges[0], bin_edges[-1], 0, 15],
+            origin='lower',
+            aspect='auto'
+        )
+        ax[column].axvline(x=np.median(tot), color='white', ls='--')
+        print()
+
+    fig.supylabel('Pixel idx')
+    fig.supxlabel('ToT (10 ns)')
+
+    plt.tight_layout()
+    plt.show()
+    dpx.dtp.stop()
+
+def read_matrix_dosi(dpx, column):
+    dpx.dpf.write_column_select(column)
+    dosi = np.asarray( dpx.dpf.read_dosi() ).reshape((16, 16))
+    plt.imshow(dosi)
+    plt.show()
 
 def show_tot_dist(dpx,
         dac=100,
@@ -60,6 +108,8 @@ def show_tot_dist(dpx,
     plt.xlabel('ToT (10 ns)')
     plt.show()
 
+    dpx.dtp.stop()
+
 def scan_dac_range(dpx, repeats=1, column=0):
     dpx.dtp.start(columns=[column])
     dpx.dpf.set_dosi_mode()
@@ -85,6 +135,8 @@ def scan_dac_range(dpx, repeats=1, column=0):
     plt.xlabel('DAC')
     plt.ylabel('ToT (10 ns)')
     plt.show()
+
+    dpx.dtp.stop()
 
 if __name__ == '__main__':
     main()
