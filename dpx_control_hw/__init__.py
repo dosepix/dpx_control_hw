@@ -11,6 +11,7 @@ from . import communicate
 from . import dpx_functions
 from . import dpx_functions_dummy
 from . import dpx_measurement
+from . import dpx_testpulse
 from . import equalization
 
 # Constants
@@ -30,7 +31,6 @@ class Dosepix():
 
         self.use_gui = use_gui
         self.params_dict = None
-        self.bin_edges = None
         self.single_thresholds = None
 
         # Detector settings, standard values
@@ -58,6 +58,7 @@ class Dosepix():
         self.comm = None
         self.dpf = None
         self.dpm = None
+        self.dtp = None
         self.equal = None
         self.support = support
 
@@ -75,7 +76,6 @@ class Dosepix():
             self.omr = conf_d['omr']
             self.conf_bits = conf_d['conf_bits']
             self.pixel_dacs = conf_d['pixel_dacs']
-            self.bin_edges = conf_d['bin_edges']
 
         # Load thl calibration
         if thl_calib_fn is not None:
@@ -172,6 +172,8 @@ class Dosepix():
         self.dpm = dpx_measurement.DPXMeasurement(self, self.dpf)
         # Functions to equalize DPX
         self.equal = equalization.Equalization(self, self.comm)
+        # Test pulse functions
+        self.dtp = dpx_testpulse.DPXTestpulse(self, self.dpf)
 
         # Enable voltages
         self.dpf.enable_vdd()

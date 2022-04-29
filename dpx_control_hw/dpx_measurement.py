@@ -111,7 +111,6 @@ class DPXMeasurement:
 
         # Init containers
         start_time = time.time()
-        frame_last = np.zeros(256)
         frame_num = 0
 
         if make_hist:
@@ -131,18 +130,17 @@ class DPXMeasurement:
 
                 # Frame readout
                 frame = np.asarray( self.dpf.read_tot() )
+                self.dpf.data_reset()
+
                 if not make_hist:
                     time_list.append(time.time() - start_time)
-                frame_filt = np.argwhere(frame - frame_last == 0)
-                frame_last = np.array(frame, copy=True)
-                frame[frame_filt] = 0
 
                 # Wait
                 time.sleep( frame_time )
 
                 # Show readout speed
                 if not use_gui and time.time() - print_time > 1:
-                    print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+                    print('%.2f Hz' % (frame_num / (time.time() - start_time)))
                     print_time = time.time()
 
                 if make_hist:
@@ -433,7 +431,7 @@ class DPXMeasurement:
         """Set OMR code according to selected analog_out"""
         omr_code = int(self.dpx.omr, 16)
         omr_code &= ~(0b11111 << 12)
-        omr_code |= getattr(dpx_support.omr_analog_out_sel, analog_out)
+        omr_code |= getattr(dpx_support._omr_analog_out_sel, analog_out)
         self.dpx.omr = '%06x' % omr_code
         print('OMR set to:', self.dpx.omr)
         self.dpf.write_omr(self.dpx.omr)
