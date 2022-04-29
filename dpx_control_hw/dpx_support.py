@@ -1,13 +1,16 @@
 from collections import namedtuple
 
-omr_analog_out_sel_type = namedtuple(
+# == Analog Out ===
+OMRAnalogOutSelType = namedtuple(
     "OMRAnalogOutSel",
     "v_tha v_tpref_fine v_casc_preamp\
         v_fbk v_tpref_coarse v_gnd i_preamp\
         i_disc1 i_disc2 v_tpbufout v_tpbufin\
         i_krum i_dac_pixel v_bandgap v_casc_krum\
-        temperature v_per_bias v_cascode_bias high_z")
-omr_analog_out_sel = omr_analog_out_sel_type(
+        temperature v_per_bias v_cascode_bias high_z"
+)
+
+_omr_analog_out_sel = OMRAnalogOutSelType(
     v_tha=0b00001 << 12,
     v_tpref_fine=0b00010 << 12,
     v_casc_preamp=0b00011 << 12,
@@ -26,4 +29,17 @@ omr_analog_out_sel = omr_analog_out_sel_type(
     temperature=0b11011 << 12,
     v_per_bias=0b11100 << 12,
     v_cascode_bias=0b11101 << 12,
-    high_z=0b11111 << 12)
+    high_z=0b11111 << 12
+)
+
+# === ConfBits ===
+ConfBitsType = namedtuple(
+    "ConfBits",
+    "mask_bit testbit_analog testbit_digital"
+)
+
+_conf_bits = ConfBitsType(
+    mask_bit=0b1 << 2,
+    testbit_analog=0b1 << 1,
+    testbit_digital=0b1 << 0
+)
