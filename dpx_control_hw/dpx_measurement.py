@@ -142,7 +142,7 @@ class DPXMeasurement:
 
                 # Show readout speed
                 if not use_gui and time.time() - print_time > 1:
-                    print( '%.2f Hz' % (frame_num / (time.time() - start_time)))
+                    print('%.2f Hz' % (frame_num / (time.time() - start_time)))
                     print_time = time.time()
 
                 if make_hist:
