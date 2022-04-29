@@ -111,7 +111,6 @@ class DPXMeasurement:
 
         # Init containers
         start_time = time.time()
-        frame_last = np.zeros(256)
         frame_num = 0
 
         if make_hist:
@@ -131,11 +130,10 @@ class DPXMeasurement:
 
                 # Frame readout
                 frame = np.asarray( self.dpf.read_tot() )
+                self.dpf.data_reset()
+
                 if not make_hist:
                     time_list.append(time.time() - start_time)
-                frame_filt = np.argwhere(frame - frame_last == 0)
-                frame_last = np.array(frame, copy=True)
-                frame[frame_filt] = 0
 
                 # Wait
                 time.sleep( frame_time )
