@@ -8,7 +8,10 @@ from . import communicate
 
 class DPXFunctions():
     """Control and measurement functions"""
-    def __init__(self, dpx, comm: communicate.Communicate):
+    def __init__(self, 
+        dpx,
+        comm: communicate.Communicate
+    ):
         self.dpx = dpx
         self.comm = comm
 
@@ -155,6 +158,11 @@ class DPXFunctions():
         """Select column"""
         self.comm.send_cmd('WRITE_COLSEL')
         self.comm.send_data_binary('%02x' % column)
+
+    # === TESTPULSE ===
+    def generate_test_pulse(self):
+        """Generate test pulse"""
+        self.comm.send_cmd('TEST_PULSE')
 
     # === DATA ===
     def read_pc(self):
