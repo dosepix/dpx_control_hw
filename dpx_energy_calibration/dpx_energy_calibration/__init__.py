@@ -57,23 +57,43 @@ class DPXEnergyCalibration():
                 hist = next(tot_gen)
 
             # Reshape measurement
-            hist = np.asarray( hist )
+            hist = np.asarray( hist, dtype=float )
+            hist = hist / np.nanmax(hist, axis=0)
             hist = hist[:,:400]
             hist = np.expand_dims(hist, -1)
+            hist = np.nan_to_num( hist )
 
             # Predict conversion factors for all pixels
             pred = self.predict( hist )
 
             # Transform to energy
-            tot_x = []
-            tot_y = []
-            for pixel in [8]: # range(256):
+            tot_x, tot_y = [], []
+            for pixel in range(256):
                 cbd = hist[pixel].flatten().tolist()
-                energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm).tolist()
-                tot = (np.asarray(cbd) * np.diff([0] + energy)).tolist()
-                plt.plot(energy, tot)
-                plt.show()
+                # Set number of ToT events with 0 to 0
+                cbd[0] = 0
 
-                tot_x += energy
-                tot_y += tot
-            yield np.asarray(tot_x), np.asarray(tot_y)
+                # Transform ToT to energy
+                energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
+
+                # Transform histogram of ToT events to energy axis
+                num_tot_events = np.sum( cbd )
+                if num_tot_events > 0:
+                    events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
+                    events = events / np.sum(events) * num_tot_events
+                else:
+                    events = np.zeros(len(energy))
+
+                # Filter weird values
+                energy, events = np.nan_to_num(energy), np.nan_to_num(events)
+                energy_filt = energy < 70
+                energy, events = energy[energy_filt], events[energy_filt]
+
+                tot_x.append( energy )
+                tot_y.append( events )
+
+            params_d = {
+                'mean': np.mean(pred, axis=0),
+                'std': np.std(pred, axis=0)
+            }
+            yield tot_x, tot_y, params_d
