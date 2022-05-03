@@ -1,13 +1,15 @@
 #!/usr/bin/env python
-import time
-import numpy as np
-import matplotlib.pyplot as plt
+import json
+
 import dpx_control_hw as dch
 import dpx_energy_calibration
 
 # Settings
 MODEL_FILE = '../models/calibration_large.h5'
-CONFIG = '../../measure/config.conf'
+PARAMETERS_FILE = '../models/parameters.json'
+CONFIG = '../../measure/config_38.conf'
+STOP_CONDITION = 0.01
+PARAMS_FILE = 'params_file.json'
 
 # Find port
 port = dch.find_port()
@@ -26,7 +28,17 @@ dpx = dch.Dosepix(
 # Load energy calibration model
 dec = dpx_energy_calibration.DPXEnergyCalibration(
     dpx,
-    MODEL_FILE
+    MODEL_FILE,
+    PARAMETERS_FILE
 )
 
-dec.measure()
+# Start measurement
+params, hist = dec.measure(
+    frame_time=0,
+    eval_after_frames=10,
+    stop_condition=STOP_CONDITION,
+    stop_range=10
+)
+
+with open(PARAMS_FILE, 'w') as f:
+    json.dump(params.tolist(), f)

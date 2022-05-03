@@ -1,3 +1,5 @@
+"""Module for the interactive energy calibration of
+a Dosepix detector using the single slot hardware"""
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -13,11 +15,23 @@ import dpx_control_hw as dch
 from tensorflow import keras
 
 class DPXEnergyCalibration():
+    """Class for the energy calibration"""
     def __init__(self,
         dpx: dch.Dosepix,
         model_file,
         parameters_file
     ):
+        """
+        Parameters
+        ----------
+        dpx : dch.Dosepix
+            Instance of a connected dosepix detector
+        model_file : str
+            Path to the keras-CNN-model to perform the energy calibration
+        parameters_file : str
+            Path to the file containing the normalization information
+            corresponding to the utilized model
+        """
         self.dpx = dpx
 
         # Model
@@ -33,6 +47,7 @@ class DPXEnergyCalibration():
         self.fig_params = None
 
     def load_model(self):
+        """Load the CNN"""
         try:
             self.model = keras.models.load_model( self.model_file )
             with open(self.parameters_file, 'r') as f:
@@ -42,6 +57,7 @@ class DPXEnergyCalibration():
             return False
 
     def predict(self, meas):
+        """Perform prediction on measurement"""
         return self.model.predict( meas )
 
     def measure(self,
