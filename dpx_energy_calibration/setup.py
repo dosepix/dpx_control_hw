@@ -23,6 +23,8 @@ setuptools.setup(name='dpx_energy_calibration',
     packages=['dpx_energy_calibration'],
     install_requires=[
         'dpx_control_hw',
+        'numpy',
         'tensorflow',
+        'plotly'
     ]
 )
