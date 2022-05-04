@@ -364,6 +364,7 @@ class DPXMeasurement:
                 # Frame readout
                 frame = np.asarray( self.dpf.read_integration() )
                 frame_list.append( frame )
+                self.dpf.data_reset()
 
                 # Wait
                 time.sleep( frame_time )
