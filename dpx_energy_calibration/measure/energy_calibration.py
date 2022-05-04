@@ -33,12 +33,12 @@ dec = dpx_energy_calibration.DPXEnergyCalibration(
 )
 
 # Start measurement
-params, hist = dec.measure(
+params, hist = dec.calibrate(
     frame_time=0,
     eval_after_frames=10,
     stop_condition=STOP_CONDITION,
-    stop_range=10
+    stop_condition_range=10
 )
 
 with open(PARAMS_FILE, 'w') as f:
-    json.dump(params.tolist(), f)
+    json.dump( dec.reformat_params(params), f)

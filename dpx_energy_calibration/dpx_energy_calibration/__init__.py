@@ -3,6 +3,7 @@ a Dosepix detector using the single slot hardware"""
 import warnings
 warnings.filterwarnings("ignore")
 
+import time
 import json
 import numpy as np
 import scipy.interpolate
@@ -32,6 +33,12 @@ class DPXEnergyCalibration():
             Path to the file containing the normalization information
             corresponding to the utilized model
         """
+
+        # Indexes of large pixels
+        self.large_pixels = [
+            pixel for pixel in range(256) if pixel % 16 not in [0, 1, 14, 15]
+        ]
+
         self.dpx = dpx
 
         # Model
@@ -60,11 +67,13 @@ class DPXEnergyCalibration():
         """Perform prediction on measurement"""
         return self.model.predict( meas )
 
-    def measure(self,
+    def calibrate(self,
         frame_time=0,
         eval_after_frames=10,
         stop_condition=0.001,
-        stop_range=10
+        stop_condition_range=10,
+        stop_time=10*60,
+        plot=True
     ):
         # Create ToT generator
         tot_gen = self.dpx.dpm.measure_tot(
@@ -81,90 +90,109 @@ class DPXEnergyCalibration():
 
         tot_range = np.arange( 400 )
 
+        # Placeholder to calculate deviation of predicted parameters
         last_params = np.zeros(4)
-        deviation_history = []
-        while True:
-            for _ in range(eval_after_frames):
-                hist_orig = next(tot_gen)
 
-            # Reshape measurement
-            hist = np.array(hist_orig, dtype=float, copy=True)
-            hist = hist[:,:400]
-            hist = hist.T / np.nanmax(hist, axis=1)
-            hist = np.expand_dims(hist.T, -1)
-            hist = np.nan_to_num( hist )
-
-            # Predict conversion factors for all pixels
-            pred = self.predict( hist )
-
-            # Transform to energy
-            tot_x, tot_y = [], []
-            for pixel in range(256):
-                cbd = hist[pixel].flatten().tolist()
-                # Set number of ToT events with 0 to 0
-                cbd[0] = 0
-
-                # Transform ToT to energy
-                energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
-
-                # Transform histogram of ToT events to energy axis
-                num_tot_events = np.sum( cbd )
-                if num_tot_events > 0:
-                    events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
-                    events = events / np.sum(events) * num_tot_events
-                else:
-                    events = np.zeros(len(energy))
-
-                # Filter weird values
-                energy, events = np.nan_to_num(energy), np.nan_to_num(events)
-                energy_filt = energy < 70
-                energy, events = energy[energy_filt], events[energy_filt]
-
-                tot_x.append( energy )
-                tot_y.append( events )
-
-            params_d = {
-                'mean': np.median(pred, axis=0),
-                'std': np.std(pred, axis=0)
-            }
-
-            # Add deviation to history
-            deviation = np.abs(last_params - params_d['mean'])
-            deviation_history.append( deviation )
-            last_params = params_d['mean']
-
-            if len(deviation_history) >= stop_range:
-                # Check for stop condition
-                dev = np.mean(np.mean(deviation_history[-stop_range:], axis=0))
-                if dev < stop_condition:
-                    break
-
-            yield tot_x, tot_y, params_d
-        return pred * self.p_norm, hist_orig
-
-    def calibrate(self,
-        frame_time=0.05,
-        eval_after_frames=100,
-        stop_condition=0.01,
-        stop_range=10
-    ):
-        # Create measurement generator
-        gen = self.measure(
-            frame_time=frame_time,
-            eval_after_frames=eval_after_frames,
-            stop_condition=stop_condition,
-            stop_range=stop_range
-        )
-
-        readouts = 0
+        # History of mean predicted parameters
         params_history = []
-        large_pixels = [pixel for pixel in range(256) if pixel % 16 not in [0, 1, 14, 15]]
-        while True:
-            try:
-                tot_x, tot_y, params_d = next(gen)
-            except StopIteration as res:
-                return res.value
 
+        # History of predictions
+        pred_history = []
+
+        # Log times of predictions
+        times = []
+        start_time = time.time()
+
+        deviation_history = []
+        hist_orig = np.zeros(400)
+        try:
+            while (time.time() - start_time) < stop_time:
+                for _ in range(eval_after_frames):
+                    hist_orig = next(tot_gen)
+
+                # Reshape measurement
+                hist = np.array(hist_orig, dtype=float, copy=True)
+                hist = hist[:,:400]
+                hist = hist.T / np.nanmax(hist, axis=1)
+                hist = np.expand_dims(hist.T, -1)
+                hist = np.nan_to_num( hist )
+
+                # Predict conversion factors for all pixels
+                pred = self.predict( hist )
+                pred_history.append( pred * self.p_norm )
+
+                # Transform to energy
+                tot_x, tot_y = [], []
+                for pixel in range(256):
+                    cbd = hist[pixel].flatten().tolist()
+                    # Set number of ToT events with 0 to 0
+                    cbd[0] = 0
+
+                    # Transform ToT to energy
+                    energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
+
+                    # Transform histogram of ToT events to energy axis
+                    num_tot_events = np.sum( cbd )
+                    if num_tot_events > 0:
+                        events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
+                        events = events / np.sum(events) * num_tot_events
+                    else:
+                        events = np.zeros(len(energy))
+
+                    # Filter weird values
+                    energy, events = np.nan_to_num(energy), np.nan_to_num(events)
+                    energy_filt = energy < 70
+                    energy, events = energy[energy_filt], events[energy_filt]
+
+                    tot_x.append( energy )
+                    tot_y.append( events )
+
+                # Calculate median and standard deviation of parameters
+                params_d = {
+                    'mean': np.median(pred, axis=0),
+                    'std': np.std(pred, axis=0)
+                }
+
+                if plot:
+                    # Add parameters to history
+                    params_history.append( params_d )
+
+                    # Add time difference to history
+                    times.append( time.time() - start_time )
+
+                    self.update_plots(
+                        tot_x,
+                        tot_y,
+                        times,
+                        params_history
+                    )
+
+                # Add deviation to history
+                deviation = np.abs(last_params - params_d['mean'])
+                deviation_history.append( deviation )
+                last_params = params_d['mean']
+
+                # Check for stop condition
+                if len(deviation_history) >= stop_condition_range:
+                    dev = np.mean(np.mean(
+                        deviation_history[-stop_condition_range:],
+                        axis=0))
+                    if dev < stop_condition:
+                        break
+        except (GeneratorExit, StopIteration):
+            pass
+
+        return np.mean(pred_history[-stop_condition_range:], axis=0),\
+            hist_orig
+
+    # === PLOTS ===
+    def update_plots(self,
+        tot_x,
+        tot_y,
+        times,
+        params_history
+    ):
+        if self.fig_hist is not None:
             # Single spectra
             for data_idx, pixel in enumerate( range(2, 14) ):
                 self.fig_hist.data[data_idx]['x'] = tot_x[pixel]
@@ -175,7 +203,7 @@ class DPXEnergyCalibration():
             sum_spectrum = np.zeros(len(energy_range))
 
             num_pixels = 0
-            for pixel in large_pixels:
+            for pixel in self.large_pixels:
                 try:
                     f_intp = scipy.interpolate.interp1d(
                         tot_x[pixel],
@@ -191,22 +219,22 @@ class DPXEnergyCalibration():
             self.fig_hist.data[-1]['x'] = energy_range
             self.fig_hist.data[-1]['y'] = sum_spectrum
 
-            # Parameters
-            params_history.append( params_d )
+        if self.fig_params:
             params = np.asarray(
                 [params_history[idx]['mean'].tolist() for idx in range(len(params_history))]
             ).T
 
-            if readouts > 0:
+            if len(times) > 0:
                 for p_idx in range(4):
-                    self.fig_params.data[p_idx]['x'] = np.arange(readouts - 1)
+                    self.fig_params.data[p_idx]['x'] = times
                     self.fig_params.data[p_idx]['y'] = np.abs(np.diff(params[p_idx]))
 
-                self.fig_params.data[-1]['x'] = np.arange(readouts - 1)
-                self.fig_params.data[-1]['y'] = np.mean([np.abs(np.diff(params[p_idx])) for p_idx in range(4)], axis=0)
-            readouts += 1
+                self.fig_params.data[-1]['x'] = times
+                self.fig_params.data[-1]['y'] = np.mean(
+                    [np.abs(np.diff(params[p_idx])) for p_idx in range(4)],
+                    axis=0
+                )
 
-    # === PLOTS ===
     def create_plots(self):
         # Histograms
         self.fig_hist = go.FigureWidget()
@@ -282,6 +310,7 @@ class DPXEnergyCalibration():
             nbins=50,
             marginal="rug"
         )
+
         fig.add_vline(
             x=np.nanmedian(thls),
             line=dict(
@@ -344,3 +373,16 @@ class DPXEnergyCalibration():
                 col=p_idx // 2 + 1
             )
         return fig
+
+    @classmethod
+    def reformat_params(cls, params):
+        params_d = {}
+        for pixel in range(256):
+            params_pixel = params[pixel]
+            params_d[pixel] = {
+                'a': params_pixel[0],
+                'b': params_pixel[1],
+                'c': params_pixel[2],
+                't': params_pixel[3]
+            }
+        return params_d

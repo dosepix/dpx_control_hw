@@ -184,8 +184,7 @@ class DPXMeasurement:
                         data_save, out_dir + out_fn, start_time
                     )
                 yield frame_list
-            else:
-                yield {'Slot1': frame_list}
+            yield {'Slot1': frame_list}
 
     def measure_dosi(self,
         frame_time=10,
