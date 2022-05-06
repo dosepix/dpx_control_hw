@@ -265,8 +265,6 @@ class DPXMeasurement:
         print('Starting Dosi-Measurement!')
         print('=========================')
         try:
-            # Data reset
-            self.dpf.data_reset()
             self.dpf.clear_bins()
             for _ in frame_range:
                 start_time = time.time()
@@ -277,9 +275,22 @@ class DPXMeasurement:
                 col_list = []
                 for col in range(16):
                     self.dpf.write_column_select(15 - col)
-                    mat = np.asarray( self.dpf.read_dosi(), dtype=float )
+                    mat = np.array( 
+                        self.dpf.read_dosi(),
+                        dtype=int,
+                        copy=True
+                    )
+
+                    # Flip, so low energies come first
+                    mat = np.flip(mat, axis=0)
+
+                    # Normalize to frequency
                     if freq:
+                        mat = np.asarray( mat, dtype=float )
                         mat = mat / float(time.time() - start_time)
+
+                    # Reshape to 16 pixels times 16 energy bins
+                    mat = mat.reshape((16, 16))
                     col_list.append( mat )
 
                 frame_list.append( col_list )

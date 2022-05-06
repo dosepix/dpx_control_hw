@@ -270,9 +270,9 @@ def get_single_thresholds(bin_edges):
     cmd_total = []
     for idx, gray in enumerate(gray_idx):
         # Construct command
-        cmd = ''.join( [
-            ('%01x' % gray) + ('%03x' % int(bin_edge)) for bin_edge in bin_edges[idx]
-            ] )
+        cmd = ''.join(
+            [('%01x' % gray) + ('%03x' % int(bin_edge)) for bin_edge in bin_edges[idx]]
+        )
         cmd_total.append( cmd )
     return cmd_total
 

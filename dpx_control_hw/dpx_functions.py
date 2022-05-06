@@ -140,6 +140,16 @@ class DPXFunctions():
             self.comm.send_data_binary( data_split )
 
     # === SINGLE THRESHOLD ===
+    def read_single_threshold(self):
+        """Read configuration bits"""
+        self.comm.send_cmd('READ_DIGITHLS', write=False)
+
+        res_tot = []
+        for _ in range(16):
+            res = self.comm.get_data(size=512)
+            res_tot.append( ''.join( ['%02x' % r for r in res] ) )
+        return res_tot
+
     def write_single_threshold(self, data):
         """Write single thresholds for dosi-mode"""
         self.comm.send_cmd('WRITE_DIGITHLS')

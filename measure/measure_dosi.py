@@ -31,9 +31,17 @@ def main():
     )
 
     frames = np.asarray( out_dict['frames'] )
-    hist = np.sum(frames, axis=(0, 2))
-    plt.step(BIN_EDGES, hist, where='post')
+    # Sum over all frames, reshape to pixels times energy bins
+    hist = np.sum(frames, axis=(0)).reshape((256, 16))
+
+    # Show pixels times energy bins
+    plt.imshow(hist, aspect='auto')
     plt.show()
+
+    # Show histogram of all pixels
+    plt.step(BIN_EDGES, np.sum(hist, axis=0), where='post')
+    plt.show()
+
 
 if __name__ == '__main__':
     main()
