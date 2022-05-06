@@ -178,7 +178,8 @@ def load_thl_edges(thl_calib_d):
 
     return thl_low, thl_high, thl_fit_params, thl_edges
 
-def thl_calib_to_edges(thl_calib_d, thres=100):
+def thl_calib_to_edges(thl_calib_d, thres=50):
+    import matplotlib.pyplot as plt
     volt, thl = thl_calib_d['Volt'], thl_calib_d['ADC']
 
     # Sort by THL
@@ -269,9 +270,9 @@ def get_single_thresholds(bin_edges):
     cmd_total = []
     for idx, gray in enumerate(gray_idx):
         # Construct command
-        cmd = ''.join( [
-            ('%01x' % gray) + ('%03x' % int(bin_edge)) for bin_edge in bin_edges[idx]
-            ] )
+        cmd = ''.join(
+            [('%01x' % gray) + ('%03x' % int(bin_edge)) for bin_edge in bin_edges[idx]]
+        )
         cmd_total.append( cmd )
     return cmd_total
 

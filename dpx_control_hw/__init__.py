@@ -1,7 +1,6 @@
-import time
 import json
-
 import serial
+from serial.tools import list_ports
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,7 +9,14 @@ from . import config
 from . import support
 from . import communicate
 from . import dpx_functions
+from . import dpx_functions_dummy
+from . import dpx_measurement
+from . import dpx_testpulse
 from . import equalization
+
+# Constants
+HWID = '206E396'    # Hardware id
+VID = '0483:5740'   # Vendor id
 
 class Dosepix():
     def __init__(self,
@@ -25,7 +31,6 @@ class Dosepix():
 
         self.use_gui = use_gui
         self.params_dict = None
-        self.bin_edges = None
         self.single_thresholds = None
 
         # Detector settings, standard values
@@ -52,7 +57,10 @@ class Dosepix():
         self.ser = None
         self.comm = None
         self.dpf = None
+        self.dpm = None
+        self.dtp = None
         self.equal = None
+        self.support = support
 
         # Init connection
         self.init_dpx()
@@ -68,7 +76,6 @@ class Dosepix():
             self.omr = conf_d['omr']
             self.conf_bits = conf_d['conf_bits']
             self.pixel_dacs = conf_d['pixel_dacs']
-            self.bin_edges = conf_d['bin_edges']
 
         # Load thl calibration
         if thl_calib_fn is not None:
@@ -91,14 +98,22 @@ class Dosepix():
 
     def equalization(self, config_fn,
         thl_step=1,
-        noise_limit=0,
-        n_evals=3
+        noise_limit=10,
+        n_evals=3,
+        num_dacs=20,
+        i_pixeldac=60,
+        thl_offset=0,
+        plot=True
     ):
         *_, last = self.equal.threshold_equalization(
             thl_step=thl_step,
             noise_limit=noise_limit,
             n_evals=n_evals,
-            use_gui=False
+            num_dacs=num_dacs,
+            i_pixeldac=i_pixeldac,
+            thl_offset=thl_offset,
+            use_gui=False,
+            plot=plot
         )
         pixel_dacs, thl_new, conf_mask = last
         periphery_dacs = self.periphery_dacs[:-4] + thl_new
@@ -134,11 +149,31 @@ class Dosepix():
                 return None
         return None
 
+    def set_thl_calib(self, thl_calib_d):
+        thl_low, thl_high, thl_fit_params, thl_edges = config.load_thl_edges(thl_calib_d)
+        self.thl_edges_low = thl_low
+        self.thl_edges_high = thl_high
+        self.thl_fit_params = thl_fit_params
+        self.thl_edges = thl_edges
+
     def init_dpx(self):
-        self.connect()
+        if self.port_name is not None:
+            self.connect()
+
         self.comm = communicate.Communicate(self.ser, debug=False)
-        self.dpf = dpx_functions.DPXFunctions(self, self.comm)
+
+        # Functions to control the Dosepix detector
+        # If port_name is None, the dummy generator is used
+        if self.port_name is None:
+            self.dpf = dpx_functions_dummy.DPXFunctionsDummy(self, self.comm)
+        else:
+            self.dpf = dpx_functions.DPXFunctions(self, self.comm)
+        # Functions to perform measurements with DPX
+        self.dpm = dpx_measurement.DPXMeasurement(self, self.dpf)
+        # Functions to equalize DPX
         self.equal = equalization.Equalization(self, self.comm)
+        # Test pulse functions
+        self.dtp = dpx_testpulse.DPXTestpulse(self, self.dpf)
 
         # Enable voltages
         self.dpf.enable_vdd()
@@ -180,3 +215,23 @@ class Dosepix():
 
     def __del__(self):
         self.close()
+
+def find_port():
+    """Find port with correct hwid to establish connection"""
+    for port in list_ports.comports():
+        chars = port.hwid.split(' ')
+
+        # USB device check
+        if chars[0] != 'USB':
+            continue
+
+        # Vendor check
+        vendor = chars[1][8:]
+        if vendor != VID:
+            continue
+
+        # Serial number of device
+        serial_num = chars[2][4:11]
+        if serial_num == HWID:
+            return port.device
+    return None

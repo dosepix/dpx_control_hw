@@ -1,27 +1,47 @@
 #!/usr/bin/env python
+""" Perform dosi-measurements. See documentation of
+dpm.measure_dosi for more information"""
+import numpy as np
+import matplotlib.pyplot as plt
 import dpx_control_hw as dch
 
-PORT = '/dev/ttyACM0'
+CONFIG = 'config.conf'
+BIN_EDGES = np.asarray(np.linspace(10, 800, 16), dtype=int).tolist()
+PARAMS_FN = None
+OUT_FN = None # 'dose_measurement.json'
 def main():
-    thl_calib_fn = None
-    config_fn = None
-    bin_edges = None
-    params_fn = None
+    port = dch.find_port()
+    if port is None:
+        port = '/dev/ttyACM0'
+
     dpx = dch.Dosepix(
-        port_name=PORT,
-        config_fn=config_fn,
-        thl_calib_fn=thl_calib_fn,
-        params_fn=params_fn,
-        bin_edges_fn=bin_edges
+        port_name=port,
+        config_fn=CONFIG,
+        thl_calib_fn=None,
+        params_fn=PARAMS_FN,
+        bin_edges_fn=BIN_EDGES
     )
 
-    dpx.dpf.measure_dosi(
+    out_dict = dpx.dpm.measure_dosi(
         frame_time=1,
-        frames=None,
+        frames=10,
         freq=False,
-        out_fn='dose_measurement.json',
+        out_fn=OUT_FN,
         use_gui=False
     )
+
+    frames = np.asarray( out_dict['frames'] )
+    # Sum over all frames, reshape to pixels times energy bins
+    hist = np.sum(frames, axis=(0)).reshape((256, 16))
+
+    # Show pixels times energy bins
+    plt.imshow(hist, aspect='auto')
+    plt.show()
+
+    # Show histogram of all pixels
+    plt.step(BIN_EDGES, np.sum(hist, axis=0), where='post')
+    plt.show()
+
 
 if __name__ == '__main__':
     main()
