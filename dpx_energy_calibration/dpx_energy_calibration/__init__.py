@@ -72,11 +72,11 @@ class DPXEnergyCalibration():
         eval_after_frames=10,
         stop_condition=0.001,
         stop_condition_range=10,
-        stop_time=10*60,
+        stop_time=None,
         plot=True
     ):
         # Create ToT generator
-        tot_gen = self.dpx.dpm.measure_tot(
+        tot_gen = self.dpx.dpm.measure_tot_gen(
             frame_time=frame_time,
             save_frames=None,
             out_dir=None,
@@ -105,136 +105,102 @@ class DPXEnergyCalibration():
 
         deviation_history = []
         hist_orig = np.zeros(400)
-        try:
-            while (time.time() - start_time) < stop_time:
-                for _ in range(eval_after_frames):
+
+        # Continue looping?
+        loop_flag = True
+        while loop_flag:
+            if stop_time is not None:
+                if (time.time() - start_time) > stop_time:
+                    print('Stop time reached!')
+                    loop_flag = False
+
+            for _ in range(eval_after_frames):
+                try:
                     hist_orig = next(tot_gen)
+                # Called on KeyboardInterrupt as generator halts
+                except StopIteration:
+                    loop_flag = False
 
-                # Reshape measurement
-                hist = np.array(hist_orig, dtype=float, copy=True)
-                hist = hist[:,:400]
-                hist = hist.T / np.nanmax(hist, axis=1)
-                hist = np.expand_dims(hist.T, -1)
-                hist = np.nan_to_num( hist )
+            # Reshape measurement
+            hist = np.array(hist_orig, dtype=float, copy=True)
+            hist = hist[:,:400]
+            hist = hist.T / np.nanmax(hist, axis=1)
+            hist = np.expand_dims(hist.T, -1)
+            hist = np.nan_to_num( hist )
 
-                # Predict conversion factors for all pixels
-                pred = self.predict( hist )
-                pred_history.append( pred * self.p_norm )
+            # Predict conversion factors for all pixels
+            pred = self.predict( hist )
+            pred_history.append( pred * self.p_norm )
 
-                # Transform to energy
-                tot_x, tot_y = [], []
-                for pixel in range(256):
-                    cbd = hist[pixel].flatten().tolist()
-                    # Set number of ToT events with 0 to 0
-                    cbd[0] = 0
+            # Transform to energy
+            tot_x, tot_y = [], []
+            for pixel in range(256):
+                cbd = hist[pixel].flatten().tolist()
+                # Set number of ToT events with 0 to 0
+                cbd[0] = 0
 
-                    # Transform ToT to energy
-                    energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
+                # Transform ToT to energy
+                energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
 
-                    # Transform histogram of ToT events to energy axis
-                    num_tot_events = np.sum( cbd )
-                    if num_tot_events > 0:
-                        events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
-                        events = events / np.sum(events) * num_tot_events
-                    else:
-                        events = np.zeros(len(energy))
+                # Transform histogram of ToT events to energy axis
+                num_tot_events = np.sum( cbd )
+                if num_tot_events > 0:
+                    events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
+                    events = events / np.sum(events) * num_tot_events
+                else:
+                    events = np.zeros(len(energy))
 
-                    # Filter weird values
-                    energy, events = np.nan_to_num(energy), np.nan_to_num(events)
-                    energy_filt = energy < 70
-                    energy, events = energy[energy_filt], events[energy_filt]
+                # Filter weird values
+                energy, events = np.nan_to_num(energy), np.nan_to_num(events)
+                energy_filt = energy < 70
+                energy, events = energy[energy_filt], events[energy_filt]
 
-                    tot_x.append( energy )
-                    tot_y.append( events )
+                tot_x.append( energy )
+                tot_y.append( events )
 
-                # Calculate median and standard deviation of parameters
-                params_d = {
-                    'mean': np.median(pred, axis=0),
-                    'std': np.std(pred, axis=0)
-                }
+            # Calculate median and standard deviation of parameters
+            params_d = {
+                'mean': np.median(pred, axis=0),
+                'std': np.std(pred, axis=0)
+            }
 
-                if plot:
-                    # Add parameters to history
-                    params_history.append( params_d )
+            if plot:
+                # Add parameters to history
+                params_history.append( params_d )
 
-                    # Add time difference to history
-                    times.append( time.time() - start_time )
+                # Add time difference to history
+                times.append( time.time() - start_time )
 
-                    self.update_plots(
-                        tot_x,
-                        tot_y,
-                        times,
-                        params_history
-                    )
+                self.update_plots(
+                    tot_x,
+                    tot_y,
+                    times,
+                    params_history
+                )
 
-                # Add deviation to history
-                deviation = np.abs(last_params - params_d['mean'])
-                deviation_history.append( deviation )
-                last_params = params_d['mean']
+            # Add deviation to history
+            deviation = np.abs(last_params - params_d['mean'])
+            deviation_history.append( deviation )
+            last_params = params_d['mean']
 
-                # Check for stop condition
-                if len(deviation_history) >= stop_condition_range:
-                    dev = np.mean(np.mean(
-                        deviation_history[-stop_condition_range:],
-                        axis=0))
+            # Check for stop condition
+            if len(deviation_history) >= stop_condition_range:
+                deviation_mean = np.mean(
+                    deviation_history[-stop_condition_range:],
+                    axis=0
+                )
+
+                # Check for nan values
+                if not np.any(np.isnan(deviation_mean)):
+                    dev = np.mean(deviation_mean)
                     if dev < stop_condition:
-                        break
-        except (GeneratorExit, StopIteration):
-            pass
+                        print('Stop condition reached!')
+                        loop_flag = False
 
         return np.mean(pred_history[-stop_condition_range:], axis=0),\
             hist_orig
 
     # === PLOTS ===
-    def update_plots(self,
-        tot_x,
-        tot_y,
-        times,
-        params_history
-    ):
-        if self.fig_hist is not None:
-            # Single spectra
-            for data_idx, pixel in enumerate( range(2, 14) ):
-                self.fig_hist.data[data_idx]['x'] = tot_x[pixel]
-                self.fig_hist.data[data_idx]['y'] = tot_y[pixel]
-
-            # Sum spectrum
-            energy_range = np.linspace(10, 70, 100)
-            sum_spectrum = np.zeros(len(energy_range))
-
-            num_pixels = 0
-            for pixel in self.large_pixels:
-                try:
-                    f_intp = scipy.interpolate.interp1d(
-                        tot_x[pixel],
-                        tot_y[pixel],
-                        bounds_error=False,
-                        fill_value=0
-                    )
-                except ValueError:
-                    continue
-                num_pixels += 1
-                sum_spectrum += f_intp(energy_range)
-            sum_spectrum = sum_spectrum / num_pixels
-            self.fig_hist.data[-1]['x'] = energy_range
-            self.fig_hist.data[-1]['y'] = sum_spectrum
-
-        if self.fig_params:
-            params = np.asarray(
-                [params_history[idx]['mean'].tolist() for idx in range(len(params_history))]
-            ).T
-
-            if len(times) > 0:
-                for p_idx in range(4):
-                    self.fig_params.data[p_idx]['x'] = times
-                    self.fig_params.data[p_idx]['y'] = np.abs(np.diff(params[p_idx]))
-
-                self.fig_params.data[-1]['x'] = times
-                self.fig_params.data[-1]['y'] = np.mean(
-                    [np.abs(np.diff(params[p_idx])) for p_idx in range(4)],
-                    axis=0
-                )
-
     def create_plots(self):
         # Histograms
         self.fig_hist = go.FigureWidget()
@@ -292,12 +258,61 @@ class DPXEnergyCalibration():
 
         # Axes titles
         self.fig_params.update_layout(
-            xaxis_title='Iterations',
+            xaxis_title='Elapsed time (s)',
             yaxis_title='Deviation'
         )
         self.fig_params.update_yaxes(type="log")
 
         return self.fig_hist, self.fig_params
+
+    def update_plots(self,
+        tot_x,
+        tot_y,
+        times,
+        params_history
+    ):
+        if self.fig_hist is not None:
+            # Single spectra
+            for data_idx, pixel in enumerate( range(2, 14) ):
+                self.fig_hist.data[data_idx]['x'] = tot_x[pixel]
+                self.fig_hist.data[data_idx]['y'] = tot_y[pixel]
+
+            # Sum spectrum
+            energy_range = np.linspace(10, 70, 100)
+            sum_spectrum = np.zeros(len(energy_range))
+
+            num_pixels = 0
+            for pixel in self.large_pixels:
+                try:
+                    f_intp = scipy.interpolate.interp1d(
+                        tot_x[pixel],
+                        tot_y[pixel],
+                        bounds_error=False,
+                        fill_value=0
+                    )
+                except ValueError:
+                    continue
+                num_pixels += 1
+                sum_spectrum += f_intp(energy_range)
+            sum_spectrum = sum_spectrum / num_pixels
+            self.fig_hist.data[-1]['x'] = energy_range
+            self.fig_hist.data[-1]['y'] = sum_spectrum
+
+        if self.fig_params:
+            params = np.asarray(
+                [params_history[idx]['mean'].tolist() for idx in range(len(params_history))]
+            ).T
+
+            if len(times) > 0:
+                for p_idx in range(4):
+                    self.fig_params.data[p_idx]['x'] = times
+                    self.fig_params.data[p_idx]['y'] = np.abs(np.diff(params[p_idx]))
+
+                self.fig_params.data[-1]['x'] = times
+                self.fig_params.data[-1]['y'] = np.mean(
+                    [np.abs(np.diff(params[p_idx])) for p_idx in range(4)],
+                    axis=0
+                )
 
     def get_plots(self):
         return self.fig_hist, self.fig_params
