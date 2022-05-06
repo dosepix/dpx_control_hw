@@ -106,96 +106,101 @@ class DPXEnergyCalibration():
         deviation_history = []
         hist_orig = np.zeros(400)
 
-        # Continue looping?
-        loop_flag = True
-        while loop_flag:
-            if stop_time is not None:
-                if (time.time() - start_time) > stop_time:
-                    print('Stop time reached!')
-                    loop_flag = False
+        try:
+            while True:
+                if stop_time is not None:
+                    if (time.time() - start_time) > stop_time:
+                        print('Stop time reached!')
+                        break
 
-            for _ in range(eval_after_frames):
-                try:
-                    hist_orig = next(tot_gen)
-                # Called on KeyboardInterrupt as generator halts
-                except StopIteration:
-                    loop_flag = False
-
-            # Reshape measurement
-            hist = np.array(hist_orig, dtype=float, copy=True)
-            hist = hist[:,:400]
-            hist = hist.T / np.nanmax(hist, axis=1)
-            hist = np.expand_dims(hist.T, -1)
-            hist = np.nan_to_num( hist )
-
-            # Predict conversion factors for all pixels
-            pred = self.predict( hist )
-            pred_history.append( pred * self.p_norm )
-
-            # Transform to energy
-            tot_x, tot_y = [], []
-            for pixel in range(256):
-                cbd = hist[pixel].flatten().tolist()
-                # Set number of ToT events with 0 to 0
-                cbd[0] = 0
-
-                # Transform ToT to energy
-                energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
-
-                # Transform histogram of ToT events to energy axis
-                num_tot_events = np.sum( cbd )
-                if num_tot_events > 0:
-                    events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
-                    events = events / np.sum(events) * num_tot_events
-                else:
-                    events = np.zeros(len(energy))
-
-                # Filter weird values
-                energy, events = np.nan_to_num(energy), np.nan_to_num(events)
-                energy_filt = energy < 70
-                energy, events = energy[energy_filt], events[energy_filt]
-
-                tot_x.append( energy )
-                tot_y.append( events )
-
-            # Calculate median and standard deviation of parameters
-            params_d = {
-                'mean': np.median(pred, axis=0),
-                'std': np.std(pred, axis=0)
-            }
-
-            if plot:
-                # Add parameters to history
-                params_history.append( params_d )
-
-                # Add time difference to history
-                times.append( time.time() - start_time )
-
-                self.update_plots(
-                    tot_x,
-                    tot_y,
-                    times,
-                    params_history
-                )
-
-            # Add deviation to history
-            deviation = np.abs(last_params - params_d['mean'])
-            deviation_history.append( deviation )
-            last_params = params_d['mean']
-
-            # Check for stop condition
-            if len(deviation_history) >= stop_condition_range:
-                deviation_mean = np.mean(
-                    deviation_history[-stop_condition_range:],
-                    axis=0
-                )
-
-                # Check for nan values
-                if not np.any(np.isnan(deviation_mean)):
-                    dev = np.mean(deviation_mean)
-                    if dev < stop_condition:
-                        print('Stop condition reached!')
+                loop_flag = True
+                for _ in range(eval_after_frames):
+                    try:
+                        hist_orig = next(tot_gen)
+                    # Called on KeyboardInterrupt as generator halts
+                    except StopIteration:
                         loop_flag = False
+                        break
+                if not loop_flag:
+                    break
+
+                # Reshape measurement
+                hist = np.array(hist_orig, dtype=float, copy=True)
+                hist = hist[:,:400]
+                hist = hist.T / np.nanmax(hist, axis=1)
+                hist = np.expand_dims(hist.T, -1)
+                hist = np.nan_to_num( hist )
+
+                # Predict conversion factors for all pixels
+                pred = self.predict( hist )
+                pred_history.append( pred * self.p_norm )
+
+                # Transform to energy
+                tot_x, tot_y = [], []
+                for pixel in range(256):
+                    cbd = hist[pixel].flatten().tolist()
+                    # Set number of ToT events with 0 to 0
+                    cbd[0] = 0
+
+                    # Transform ToT to energy
+                    energy = dch.support.tot_to_energy(tot_range, *pred[pixel] * self.p_norm)
+
+                    # Transform histogram of ToT events to energy axis
+                    num_tot_events = np.sum( cbd )
+                    if num_tot_events > 0:
+                        events = (np.asarray(cbd) / np.diff([0] + energy.tolist()))
+                        events = events / np.sum(events) * num_tot_events
+                    else:
+                        events = np.zeros(len(energy))
+
+                    # Filter weird values
+                    energy, events = np.nan_to_num(energy), np.nan_to_num(events)
+                    energy_filt = energy < 70
+                    energy, events = energy[energy_filt], events[energy_filt]
+
+                    tot_x.append( energy )
+                    tot_y.append( events )
+
+                # Calculate median and standard deviation of parameters
+                params_d = {
+                    'mean': np.median(pred, axis=0),
+                    'std': np.std(pred, axis=0)
+                }
+
+                if plot:
+                    # Add parameters to history
+                    params_history.append( params_d )
+
+                    # Add time difference to history
+                    times.append( time.time() - start_time )
+
+                    self.update_plots(
+                        tot_x,
+                        tot_y,
+                        times,
+                        params_history
+                    )
+
+                # Add deviation to history
+                deviation = np.abs(last_params - params_d['mean'])
+                deviation_history.append( deviation )
+                last_params = params_d['mean']
+
+                # Check for stop condition
+                if len(deviation_history) >= stop_condition_range:
+                    deviation_mean = np.mean(
+                        deviation_history[-stop_condition_range:],
+                        axis=0
+                    )
+
+                    # Check for nan values
+                    if not np.any(np.isnan(deviation_mean)):
+                        dev = np.mean(deviation_mean)
+                        if dev < stop_condition:
+                            print('Stop condition reached!')
+                            break
+        except (SystemExit, KeyboardInterrupt):
+            print("Calibration interrupted!")
 
         return np.mean(pred_history[-stop_condition_range:], axis=0),\
             hist_orig
