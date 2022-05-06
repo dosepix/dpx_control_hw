@@ -43,8 +43,11 @@ class DPXMeasurement:
             return gen
 
         # Return last value of generator
-        *_, last = gen
-        return last
+        try:
+            while True:
+                next( gen )
+        except StopIteration as last:
+            return last.value
 
     def measure_tot_gen(self,
         frame_time=1,
@@ -172,20 +175,20 @@ class DPXMeasurement:
                         else:
                             frame_list = []
 
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit, GeneratorExit) as error:
+            print(repr(error))
             print('Measurement interrupted!')
-        finally:
-            if not use_gui:
-                data_save = {'frames': frame_list}
-                if not make_hist:
-                    data_save['times'] = time_list
-                if (out_dir is not None) and (out_fn is not None):
-                    self.measure_save(
-                        data_save, out_dir + out_fn, start_time
-                    )
-                yield frame_list
-            else:
-                yield {'Slot1': frame_list}
+
+        if not use_gui:
+            data_save = {'frames': frame_list}
+            if not make_hist:
+                data_save['times'] = time_list
+            if (out_dir is not None) and (out_fn is not None):
+                self.measure_save(
+                    data_save, out_dir + out_fn, start_time
+                )
+            return frame_list
+        return {'Slot1': frame_list}
 
     def measure_dosi(self,
         frame_time=10,
@@ -207,8 +210,11 @@ class DPXMeasurement:
             return gen
 
         # Return last value of generator
-        *_, last = gen
-        return last
+        try:
+            while True:
+                next( gen )
+        except StopIteration as last:
+            return last.value
 
     def measure_dosi_gen(self,
         frame_time=10,
@@ -280,17 +286,16 @@ class DPXMeasurement:
                 time_list.append( time.time() - meas_start )
                 if use_gui:
                     yield np.asarray( frame_list )
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
             print('Measurement interrupted!')
-        finally:
-            out_dict = {'frames': frame_list, 'times': time_list}
-            if out_fn is not None:
-                yield self.measure_save(
-                    out_dict,
-                    out_fn, start_time
-                )
-            else:
-                yield out_dict
+
+        out_dict = {'frames': frame_list, 'times': time_list}
+        if out_fn is not None:
+            return self.measure_save(
+                out_dict,
+                out_fn, start_time
+            )
+        return out_dict
 
     def measure_integration(self,
         out_fn='integration_measurement.json',
@@ -310,8 +315,11 @@ class DPXMeasurement:
             return gen
 
         # Return last value of generator
-        *_, last = gen
-        return last
+        try:
+            while True:
+                next( gen )
+        except StopIteration as last:
+            return last.value
 
     def measure_integration_gen(self,
         out_fn='integration_measurement.json',
@@ -378,21 +386,20 @@ class DPXMeasurement:
                     print_time = time.time()
 
                 frame_num += 1
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit, GeneratorExit):
             print('Measurement interrupted!')
-        finally:
-            if not use_gui:
-                data_save = {
-                    'frames': frame_list,
-                    'times': time_list
-                }
-                if out_fn is not None:
-                    self.measure_save(
-                        data_save, out_fn, start_time
-                    )
-                yield data_save
-            else:
-                yield {'Slot1': frame_list}
+
+        if not use_gui:
+            data_save = {
+                'frames': frame_list,
+                'times': time_list
+            }
+            if out_fn is not None:
+                self.measure_save(
+                    data_save, out_fn, start_time
+                )
+            return data_save
+        return {'Slot1': frame_list}
 
     def measure_adc(self,
         analog_out='v_tha',
@@ -422,8 +429,11 @@ class DPXMeasurement:
             return gen
 
         # Return last value of generator
-        *_, last = gen
-        return last
+        try:
+            while True:
+                next( gen )
+        except StopIteration as last:
+            return last.value
 
     def select_adc(
         self,
@@ -548,7 +558,7 @@ class DPXMeasurement:
 
         if out_fn is not None:
             self.measure_save(out_dict, out_fn, start_time=None)
-        yield out_dict
+        return out_dict
 
     def measure_thl(self, out_fn=None, plot=False, use_gui=False):
         """See `measure_adc_gen` for documentation. Wrapper for threshold"""
@@ -563,10 +573,15 @@ class DPXMeasurement:
             plot=plot,
             use_gui=use_gui)
 
+
         if use_gui:
             return gen
-        *_, out_dict = gen
-        return out_dict
+
+        try:
+            while True:
+                next( gen )
+        except StopIteration as last:
+            return last.value
 
     @classmethod
     def measure_save(cls,

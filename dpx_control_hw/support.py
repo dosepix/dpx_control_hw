@@ -187,8 +187,14 @@ def get_thl(p_a, p_b, p_c, p_t):
 
 def energy_to_tot(val, p_a, p_b, p_c, p_t):
     """Transform energy to ToT"""
-    return np.where(val >= get_thl(p_a, p_b, p_c, p_t),
-        p_a*val + p_b + float(p_c)/(val - p_t), 0)
+    try:
+        thl = get_thl(p_a, p_b, p_c, p_t)
+    except ZeroDivisionError:
+        thl = 8
+    return np.where(
+        val >= thl,
+        p_a*val + p_b + float(p_c) / (val - p_t), 0
+    )
 
 def tot_to_energy(val, p_a, p_b, p_c, p_t):
     """Transform ToT to energy"""

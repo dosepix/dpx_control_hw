@@ -6,11 +6,11 @@ E-Mail: schm.seb@gmail.com
 
 ## Installation
 
-There are multiple ways to install the module. The easiest one is to use a virtual environment. More experiened users might consider to install the module directly. Please refer to the instructions below and ensure that python3 is used.
+There are multiple ways to install the module. The easiest one is to use a virtual environment. More experienced users might consider installing the module directly. Please refer to the instructions below and ensure that python3 is used.
 
 ### Virtual Environment Installation
 
-First,  a directory for the virtual environment has to be created. To provide an example, it is called `dpx_venv` in the following.  Afterwards, the environment is created via
+First, a directory for the virtual environment has to be created. To provide an example, it is called `dpx_venv` in the following.  Afterwards, the environment is created via
 
 ```bash
 python3 -m venv dpx_venv
