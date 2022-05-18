@@ -27,7 +27,8 @@ class DPXMeasurement:
         out_dir='tot_measurement/',
         meas_time=None,
         make_hist=True,
-        use_gui=False
+        use_gui=False,
+        find_opt_frame_time=False
     ):
         """Wrapper for generator measure_tot_gen"""
         gen = self.measure_tot_gen(
@@ -36,7 +37,8 @@ class DPXMeasurement:
             out_dir=out_dir,
             meas_time=meas_time,
             make_hist=make_hist,
-            use_gui=use_gui
+            use_gui=use_gui,
+            find_opt_frame_time=find_opt_frame_time
         )
 
         if use_gui:
@@ -55,7 +57,8 @@ class DPXMeasurement:
         out_dir='tot_measurement/',
         meas_time=None,
         make_hist=True,
-        use_gui=False
+        use_gui=False,
+        find_opt_frame_time=False
     ):
         """Perform measurement in ToT-mode. Implemented as a generator to
         yield intermediate results when gui is used
@@ -112,17 +115,46 @@ class DPXMeasurement:
         else:
             out_fn = None
 
-        # Init containers
-        start_time = time.time()
-        frame_num = 0
-
         if make_hist:
             frame_list = np.zeros( (256, 4095) )
         else:
             frame_list, time_list = [], []
 
+        if find_opt_frame_time:
+            fraction_list = []
+            eventnumber_list = []
+            frametime_list = np.linspace(0,0.1,11)
+            self.dpf.data_reset()
+            for frame_time in frametime_list:
+                fraction_list_oneframetime = []
+                fraction_start_time = time.time()
+                eventnumber_list_oneframetime = []
+                while time.time()-fraction_start_time < 2:
+                    frame = np.asarray( self.dpf.read_tot() )
+                    self.dpf.data_reset()
+                    time.sleep( frame_time )
+                    eventnumber_single = np.count_nonzero(frame.tolist())
+                    eventnumber_list_oneframetime.append(eventnumber_single)
+                    fraction_single = eventnumber_single/256
+                    fraction_list_oneframetime.append(fraction_single)
+                eventnumber = sum(eventnumber_list_oneframetime)
+                eventnumber_list.append(eventnumber)
+                fraction = np.mean(fraction_single)
+                fraction_list.append(fraction)
+                print(fraction)
+                print(eventnumber)
+            frametime_opt = frametime_list[eventnumber_list.index(np.max(eventnumber_list))]
+            print('Optimal fraction:', fraction_list[list(frametime_list).index(frametime_opt)])
+            print('Set frame_time to optimum:', frametime_opt)
+            frame_time = frametime_opt
+
         print('Starting ToT Measurement!')
         print('=========================')
+
+        # Init containers
+        start_time = time.time()
+        frame_num = 0
+
         print_time = start_time
         try:
             self.dpf.data_reset()
